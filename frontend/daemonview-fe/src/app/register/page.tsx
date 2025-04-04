@@ -1,14 +1,13 @@
-// components/LoginForm.tsx
 'use client';
 
-import styled, {keyframes} from 'styled-components';
+import styled from 'styled-components';
 
 const Container = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color:rgb(17, 16, 44);
+  background-color: rgb(17, 16, 44);
 `;
 
 const FormWrapper = styled.div`
@@ -27,18 +26,15 @@ const FormWrapper = styled.div`
   border-radius: 18px;
   justify-content: center;
   align-items: center;
-  height: 50%;
+  height: 70%;
 
-  /* Add subtle glowing effect */
   box-shadow:
     0 0 8px rgba(104, 0, 255, 0.4),
     0 0 16px rgba(64, 201, 255, 0.2),
     0 0 24px rgba(232, 28, 255, 0.15);
 `;
 
-
 const Title = styled.h2`
-  margin-bottom: 1rem;
   text-align: center;
   color: white;
   font-size: 30px;
@@ -52,7 +48,7 @@ const Input = styled.input`
   border-radius: 1.3rem;
   font-size: 1rem;
   margin-bottom: 2rem;
-  background-color:rgb(51, 50, 51);
+  background-color: rgb(51, 50, 51);
 `;
 
 const Button = styled.button`
@@ -85,7 +81,7 @@ const Links = styled.div`
   text-align: center;
 
   a {
-    color:rgb(72, 153, 247);
+    color: rgb(72, 153, 247);
     text-decoration: none;
 
     &:hover {
@@ -94,23 +90,24 @@ const Links = styled.div`
   }
 `;
 
-const LoginForm: React.FC = () => {
+const RegisterForm: React.FC = () => {
   return (
     <Container>
       <FormWrapper>
-        <Title>Login</Title>
+        <Title>Register</Title>
         <form>
           <Input type="text" placeholder="Username" required />
+          <Input type="email" placeholder="Email" required />
           <Input type="password" placeholder="Password" required />
-          <Button type="submit">Login</Button>
+          <Input type="password" placeholder="Confirm Password" required />
+          <Button type="submit">Sign Up</Button>
         </form>
         <Links>
-          <a href="/forgot-password">Forgot Password?</a> | {' '}
-          <a href="/register">Register</a>
+          Already have an account? <a href="/login">Login</a>
         </Links>
       </FormWrapper>
     </Container>
   );
 };
 
-export default LoginForm;
+export default RegisterForm;
