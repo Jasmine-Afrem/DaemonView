@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+:root {
+  --font-orbitron: 'Orbitron', sans-serif;
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+body {
+  font-family: var(--font-orbitron), sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+@font-face {
+  font-family: 'BPReplay';
+  src: url('/fonts/BPReplay.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'BPReplay';
+  src: url('/fonts/BPReplayBold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'BPReplay';
+  src: url('/fonts/BPReplayItalics.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'BPReplay';
+  src: url('/fonts/BPReplayBoldItalics.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+}
