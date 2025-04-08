@@ -2,6 +2,9 @@
 'use client';
 
 import styled, {keyframes} from 'styled-components';
+import { useEffect } from 'react';
+import React, {useState} from 'react';
+import { useRouter } from 'next/navigation';
 
 const Container = styled.div`
   display: flex;
@@ -95,13 +98,54 @@ const Links = styled.div`
 `;
 
 const LoginForm: React.FC = () => {
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch('http://localhost:8080/api/check-auth', {
+      credentials: 'include'
+    })
+      .then(res => {
+        if (res.ok) {
+          router.push('/dashboard'); // Already logged in
+        }
+      });
+  }, []);
+
+  // Handle login form submission
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Send POST request to the Express backend
+    const response = await fetch('http://localhost:8080/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username: username, password: password }),
+      credentials: 'include'
+    });
+
+    const data = await response.json();
+
+    if (response.status === 200) {
+      // Redirect user on successful login
+      router.push('/dashboard'); // Redirect to the dashboard or other page
+    } else {
+      setError(data.message); // Display error message from the backend
+    }
+  };
+
   return (
     <Container>
       <FormWrapper>
         <Title>Login</Title>
-        <form>
-          <Input type="text" placeholder="Username" required />
-          <Input type="password" placeholder="Password" required />
+        <form onSubmit={handleLogin}>
+          <Input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           <Button type="submit">Login</Button>
         </form>
         <Links>

@@ -1,6 +1,8 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useEffect } from 'react';
 import styled from 'styled-components';
 import {
   FiSearch,
@@ -33,6 +35,46 @@ const sidebarIcons = [
 
 const DaemonView = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true); // sidebar open/close status
+  const [username, setUsername] = useState('');
+  const router = useRouter();
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:8080/api/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+  const handleProfileClick = () => {
+    router.push('/dashboard/profile');
+  };
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('http://localhost:8080/api/check-auth', {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setUsername(data.user.username);
+        }
+        else {
+          router.push('/login')
+        }
+      }
+      catch (err) {
+        console.error('Auth check failed', err);
+        router.push('/login')
+      }
+    };
+    fetchUser();
+  })
 
   return (
     <Container>
@@ -66,9 +108,9 @@ const DaemonView = () => {
 
           {/* user area showing user profile icon and username */}
           <UserArea>
-            <FiUser size={20} />
-            <span>John Doe</span>
-            <FiLogOut size={20} />
+            <FiUser size={20} style={{ cursor: 'pointer' }} onClick={handleProfileClick} />
+            <span>{username}</span>
+            <FiLogOut size={20} style={{ cursor: 'pointer' }} onClick={handleLogout} />
           </UserArea>
         </Header>
 

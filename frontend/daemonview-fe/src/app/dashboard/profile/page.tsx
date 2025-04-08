@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styled from 'styled-components';
 import { FiArrowLeft, FiUser, FiCamera, FiEye, FiEyeOff, FiLogOut } from 'react-icons/fi';
@@ -14,6 +15,7 @@ const ProfilePage = () => {
   });
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -53,6 +55,30 @@ const ProfilePage = () => {
       avatar: '',
     });
   };
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        // Make a request to check if the session (cookie) exists
+        const res = await fetch('http://localhost:8080/api/check-auth', {
+          method: 'GET',
+          credentials: 'include', // Ensure cookies are sent with the request
+        });
+
+        if (!res.ok) {
+          // If the session is not valid, redirect to login
+          router.push('/login');
+        } else {
+          const data = await res.json();
+          setUserInfo({ ...userInfo, username: data.user.username });
+        }
+      } catch (err) {
+        console.error('Error checking session:', err);
+        router.push('/login');
+      }
+    };
+    checkSession();
+  })
 
   return (
     <Container>

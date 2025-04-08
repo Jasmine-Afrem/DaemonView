@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 
 const Container = styled.div`
@@ -91,15 +93,52 @@ const Links = styled.div`
 `;
 
 const RegisterForm: React.FC = () => {
+
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmP, setConfirmP] = useState('');
+  const [error, setError] = useState('');
+  const router = useRouter();
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (password !== confirmP) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    // Send POST request to the Express backend
+    const response = await fetch('http://localhost:8080/api/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({username: username,
+                            password: password,
+                            email: email
+                          }),
+    });
+
+    const data = await response.json();
+
+    if (response.status === 201) {
+      router.push('/login');
+    } else {
+      setError(data.message);
+    }
+  };
+
   return (
     <Container>
       <FormWrapper>
         <Title>Register</Title>
-        <form>
-          <Input type="text" placeholder="Username" required />
-          <Input type="email" placeholder="Email" required />
-          <Input type="password" placeholder="Password" required />
-          <Input type="password" placeholder="Confirm Password" required />
+        <form onSubmit={handleRegister}>
+          <Input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <Input type="password" placeholder="Confirm Password" value={confirmP} onChange={(e) => setConfirmP(e.target.value)} required />
           <Button type="submit">Sign Up</Button>
         </form>
         <Links>
