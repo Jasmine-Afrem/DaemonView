@@ -29,7 +29,7 @@ const FormWrapper = styled.div`
   border-radius: 18px;
   justify-content: center;
   align-items: center;
-  height: 70%;
+  height: auto;
 
   box-shadow:
     0 0 8px rgba(104, 0, 255, 0.4),

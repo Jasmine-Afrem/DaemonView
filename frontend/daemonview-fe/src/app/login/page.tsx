@@ -30,7 +30,7 @@ const FormWrapper = styled.div`
   border-radius: 18px;
   justify-content: center;
   align-items: center;
-  height: 50%;
+  height: auto;
 
   /* Add subtle glowing effect */
   box-shadow:

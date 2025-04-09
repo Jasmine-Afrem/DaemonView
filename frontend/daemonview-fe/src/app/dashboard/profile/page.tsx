@@ -287,7 +287,7 @@ const PasswordWrapper = styled.div`
   position: relative;
 `;
 
-const PasswordToggle = styled.button`
+const PasswordToggle = styled.button.attrs({ type: 'button' })`
   position: absolute;
   top: 50%;
   right: 10px;
