@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 import styled from 'styled-components';
+import { useEffect } from 'react';
 
 const Container = styled.div`
   display: flex;
@@ -100,6 +101,17 @@ const RegisterForm: React.FC = () => {
   const [confirmP, setConfirmP] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+      fetch('http://localhost:8080/api/check-auth', {
+        credentials: 'include'
+      })
+        .then(res => {
+          if (res.ok) {
+            router.push('/dashboard'); // Already logged in
+          }
+        });
+    }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();

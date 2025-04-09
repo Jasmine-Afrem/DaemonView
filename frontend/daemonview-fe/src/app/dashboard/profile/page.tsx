@@ -70,7 +70,7 @@ const ProfilePage = () => {
           router.push('/login');
         } else {
           const data = await res.json();
-          setUserInfo({ ...userInfo, username: data.user.username });
+          setUserInfo({ ...userInfo, username: data.user.username, email: data.user.email});
         }
       } catch (err) {
         console.error('Error checking session:', err);
@@ -78,7 +78,7 @@ const ProfilePage = () => {
       }
     };
     checkSession();
-  })
+  }, []);
 
   return (
     <Container>

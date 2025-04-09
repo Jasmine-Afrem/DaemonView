@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '2.tcp.eu.ngrok.io',
+  host: '127.0.0.1',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 13232,
+  port: 3306,
 }).promise();
 
 // GET /api/check-auth
@@ -77,7 +77,8 @@ router.post('/login', async (req, res) => {
 
     req.session.user = {
       id: user.id,
-      username: user.username
+      username: user.username,
+      email: user.email
     };
 
     res.json({ message: 'Login successful' });
