@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '4.tcp.eu.ngrok.io',
+  host: '6.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 15265,
+  port: 14547,
 }).promise();
 
 // GET /api/check-auth

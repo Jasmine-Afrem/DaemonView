@@ -7,9 +7,6 @@ var cors = require('cors');
 var bcrypt = require('bcrypt');
 var session = require('express-session');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-var homeRouter = require('./routes/home');
 var authRouter = require('./routes/auth');
 
 var app = express();
@@ -39,9 +36,6 @@ app.use(session({
 }));
 
 app.use('/api', authRouter);
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-app.use('/home', homeRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
