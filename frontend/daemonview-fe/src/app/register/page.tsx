@@ -10,7 +10,10 @@ const Container = styled.div`
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-color: rgb(17, 16, 44);
+  background-image: url('/images/background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 `;
 
 const FormWrapper = styled.div`
@@ -32,9 +35,9 @@ const FormWrapper = styled.div`
   height: auto;
 
   box-shadow:
-    0 0 8px rgba(104, 0, 255, 0.4),
-    0 0 16px rgba(64, 201, 255, 0.2),
-    0 0 24px rgba(232, 28, 255, 0.15);
+    0 0 8px rgba(190, 75, 243, 0.4),
+    0 0 16px rgba(91, 57, 182, 0.2),
+    0 0 24px rgba(237, 73, 255, 0.15);
 `;
 
 const Title = styled.h2`
@@ -52,6 +55,21 @@ const Input = styled.input`
   font-size: 1rem;
   margin-bottom: 2rem;
   background-color: rgb(51, 50, 51);
+  color: white;
+  transition: all 0.3s ease;
+
+  &:focus {
+    outline: none;
+    border-color: rgb(210, 206, 224);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  }
+
+  &:-webkit-autofill {
+    background-color: rgb(51, 50, 51) !important;
+    -webkit-box-shadow: 0 0 0px 1000px rgb(51, 50, 51) inset;
+    -webkit-text-fill-color: white !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
 `;
 
 const Button = styled.button`
@@ -82,13 +100,18 @@ const Button = styled.button`
 const Links = styled.div`
   margin-top: 1rem;
   text-align: center;
+  font-size: 15px;
 
   a {
-    color: rgb(72, 153, 247);
+    color: rgb(62, 147, 245);
     text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-block;
 
     &:hover {
       text-decoration: underline;
+      text-shadow: 0 0 10px rgba(62, 147, 245, 0.8);
+      transform: scale(1.05);
     }
   }
 `;
