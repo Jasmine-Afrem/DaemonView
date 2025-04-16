@@ -186,7 +186,7 @@ const LoginForm: React.FC = () => {
           <Button type="submit">Login</Button>
         </form>
         <Links>
-          <a href="/forgot-password">Forgot Password?</a> | {' '}
+          <a href="/login/forgot-password">Forgot Password?</a> | {' '}
           <a href="/register">Register</a>
         </Links>
       </FormWrapper>
