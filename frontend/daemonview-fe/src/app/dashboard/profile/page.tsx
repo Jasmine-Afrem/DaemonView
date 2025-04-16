@@ -4,17 +4,20 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styled from 'styled-components';
-import { FiArrowLeft, FiUser, FiCamera, FiEye, FiEyeOff, FiLogOut } from 'react-icons/fi';
+import { FiArrowLeft, FiUser, FiCamera, FiEye, FiEyeOff } from 'react-icons/fi';
 
 const ProfilePage = () => {
   const [userInfo, setUserInfo] = useState({
     username: 'John Doe',
     email: 'john.doe@example.com',
     password: 'password123',
-    avatar: '', // Optionally include an avatar URL
+    avatar: '',
   });
+
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [popupVisible, setPopupVisible] = useState(false);
+
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,28 +33,30 @@ const ProfilePage = () => {
       reader.onloadend = () => {
         setUserInfo({
           ...userInfo,
-          avatar: reader.result as string, // Set the image as base64 string
+          avatar: reader.result as string,
         });
       };
 
-      reader.readAsDataURL(file); // Convert the file to a base64 string
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSaveChanges = () => {
-    setShowPopup(true); // Show the confirmation popup
+    setShowPopup(true);
+    setTimeout(() => setPopupVisible(true), 10);
   };
 
   const handleConfirmSave = () => {
     console.log('Changes confirmed:', userInfo);
-    setShowPopup(false); // Close the popup and save changes
+    setPopupVisible(false);
+    setTimeout(() => setShowPopup(false), 400);
   };
 
   const resetForm = () => {
     setUserInfo({
       username: 'John Doe',
       email: 'john.doe@example.com',
-      password: 'password123',
+      password: 'password',
       avatar: '',
     });
   };
@@ -59,18 +64,16 @@ const ProfilePage = () => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // Make a request to check if the session (cookie) exists
         const res = await fetch('http://localhost:8080/api/check-auth', {
           method: 'GET',
-          credentials: 'include', // Ensure cookies are sent with the request
+          credentials: 'include',
         });
 
         if (!res.ok) {
-          // If the session is not valid, redirect to login
           router.push('/login');
         } else {
           const data = await res.json();
-          setUserInfo({ ...userInfo, username: data.user.username, email: data.user.email});
+          setUserInfo({ ...userInfo, username: data.user.username, email: data.user.email });
         }
       } catch (err) {
         console.error('Error checking session:', err);
@@ -98,7 +101,6 @@ const ProfilePage = () => {
         </Avatar>
         <Username>{userInfo.username}</Username>
 
-        {/* Subtle Change Avatar Button */}
         <ChangeAvatarButton htmlFor="avatar-upload">
           <FiCamera size={16} />
         </ChangeAvatarButton>
@@ -130,32 +132,53 @@ const ProfilePage = () => {
             </PasswordWrapper>
           </Field>
 
-        <SaveButton type="button" onClick={handleSaveChanges}>Save Changes</SaveButton>
-
+          <SaveButton type="button" onClick={handleSaveChanges}>
+            Save Changes
+          </SaveButton>
         </FormCard>
       </ProfileSection>
 
-      {/* Popup */}
       {showPopup && (
-        <Popup>
-          <PopupContent>
-            <h3>Are you sure you want to save the changes?</h3>
-            <div>
-              <ConfirmButton onClick={handleConfirmSave}>Yes</ConfirmButton>
-            </div>
-          </PopupContent>
-        </Popup>
+      <Popup $isVisible={popupVisible}>
+        <PopupContent $isVisible={popupVisible}>
+          <h3>Are you sure you want to save the changes?</h3>
+          <div>
+            <ConfirmButton onClick={handleConfirmSave}>Yes</ConfirmButton>
+          </div>
+        </PopupContent>
+      </Popup>
       )}
     </Container>
   );
 };
 
+// === STYLED COMPONENTS ===
+
 const Container = styled.div`
+  position: relative;
   min-height: 100vh;
   background-color: #090821;
   color: #fff;
   font-family: 'Orbitron', sans-serif;
   padding: 40px;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: url('/images/background.png');
+    background-size: cover;
+    background-position: center;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
 `;
 
 const Header = styled.div`
@@ -171,9 +194,12 @@ const Back = styled.div`
   color: #635bff;
   cursor: pointer;
   font-weight: bold;
+  transition: all 0.2s ease;
 
   &:hover {
-    opacity: 0.8;
+    opacity: 1;
+    transform: scale(1.05);
+    text-shadow: 0 0 6px rgba(140, 135, 247, 0.5);
   }
 `;
 
@@ -201,6 +227,7 @@ const Avatar = styled.div`
   box-shadow: 0 0 15px rgba(99, 91, 255, 0.5);
   font-size: 3rem;
   cursor: pointer;
+  transition: all 0.3s ease;
 
   &:hover {
     opacity: 0.8;
@@ -218,11 +245,10 @@ const ChangeAvatarButton = styled.label`
   align-items: center;
   background-color: #635bff;
   color: #fff;
-  padding: 4px;
+  padding: 4px 10px;
   border-radius: 30px;
   cursor: pointer;
   font-weight: bold;
-  padding-left: 8px;
   margin-bottom: 20px;
   transition: background-color 0.3s;
 
@@ -245,7 +271,7 @@ const FormCard = styled.form`
   border-radius: 20px;
   padding: 32px;
   backdrop-filter: blur(6px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0px 32px rgba(107, 61, 214, 0.2);
   width: 100%;
   max-width: 400px;
   display: flex;
@@ -296,6 +322,13 @@ const PasswordToggle = styled.button.attrs({ type: 'button' })`
   border: none;
   color: #aaa;
   cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: #fff;
+    transform: translateY(-50%) scale(1.1);
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.4);
+  }
 `;
 
 const SaveButton = styled.button`
@@ -316,13 +349,13 @@ const SaveButton = styled.button`
   overflow: hidden;
 
   &:hover {
-    background-color: #4e49c4;
+    background-color: rgb(108, 104, 240);
     animation: glow 2s ease-in-out infinite;
   }
 
   @keyframes glow {
     0% {
-      box-shadow: 0 0 10px rgba(99, 91, 255, 0.4);
+      box-shadow: 0 0 10px rgba(99, 136, 238, 0.4);
     }
     50% {
       box-shadow: 0 0 20px rgba(99, 91, 255, 0.7);
@@ -333,28 +366,34 @@ const SaveButton = styled.button`
   }
 `;
 
-// Popup Styles
-const Popup = styled.div`
+const Popup = styled.div<{ $isVisible: boolean }>`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   display: flex;
   justify-content: center;
   align-items: center;
   background: rgba(0, 0, 0, 0.5);
   z-index: 9999;
+  opacity: ${(props) => (props.$isVisible ? 1 : 0)};
+  pointer-events: ${(props) => (props.$isVisible ? 'auto' : 'none')};
+  transition: opacity 0.4s ease;
 `;
 
-const PopupContent = styled.div`
-  background: #fff;
-  color: #090821;
+const PopupContent = styled.div<{ $isVisible: boolean }>`
+  background: #1c1b3a;
+  color: #ffffff;
   padding: 30px;
-  border-radius: 10px;
+  border-radius: 16px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  width: 300px;
+  width: 320px;
+  box-shadow:
+    0 0 8px rgba(99, 91, 255, 0.4),
+    0 0 16px rgba(99, 91, 255, 0.3),
+    0 0 24px rgba(99, 91, 255, 0.2);
+  transform: ${(props) => (props.$isVisible ? 'scale(1)' : 'scale(0.85)')};
+  transition: all 0.4s ease;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 const ConfirmButton = styled.button`
@@ -364,7 +403,7 @@ const ConfirmButton = styled.button`
   border: none;
   border-radius: 5px;
   cursor: pointer;
-  margin: 10px;
+  margin-top: 15px;
 
   &:hover {
     background-color: #4e49c4;

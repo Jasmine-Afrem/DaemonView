@@ -10,10 +10,26 @@ const Container = styled.div`
   justify-content: center;
   align-items: center;
   height: 100vh;
-  background-image: url('/images/background.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/background.png');
+    background-size: cover;
+    background-position: center;
+    opacity: 0.15; /* Lower = more faded */
+    pointer-events: none;
+    z-index: 0;
+  }
+
+    > * {
+    position: relative;
+    z-index: 1;
+  }
 `;
 
 const FormWrapper = styled.div`
@@ -60,6 +76,7 @@ const Input = styled.input`
 
   &:focus {
     outline: none;
+    color: white;
     border-color: rgb(210, 206, 224);
     box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
   }

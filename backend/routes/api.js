@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '6.tcp.eu.ngrok.io',
+  host: '4.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 14547,
+  port: 12167,
 }).promise();
 
 // GET /api/check-auth
@@ -17,6 +17,17 @@ router.get('/check-auth', (req, res) => {
     res.json({ loggedIn: true, user: req.session.user });
   } else {
     res.status(401).json({ loggedIn: false });
+  }
+});
+
+// GET /api/get-tickets
+router.get('/get-tickets', async (req, res) => {
+  try {
+    const [tickets] = await db.query('SELECT * FROM tickets');
+    console.log(tickets);
+    res.json(tickets);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error during registration' });
   }
 });
 

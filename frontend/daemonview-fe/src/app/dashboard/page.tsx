@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-//import { useEffect } from 'react';
+import { useEffect } from 'react';
 import styled from 'styled-components';
 import {
   FiSearch,
@@ -22,6 +22,19 @@ import {
 } from 'react-icons/fi';
 import '../globals.css';
 
+type Ticket = {
+  ticket_title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_at: Date;
+  updated_at: Date;
+  submitted_by: string;
+  related_incident_title: string;
+  related_device_name: string;
+};
+
+
 // sidebar items array
 const sidebarIcons = [
   { icon: <FiHome />, label: 'Home' },
@@ -35,8 +48,63 @@ const sidebarIcons = [
 
 const DaemonView = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true); // sidebar open/close status
-  //const [username, setUsername] = useState('');
+  const [username, setUsername] = useState('');
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [isClosingPopup, setIsClosingPopup] = useState(false);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const closePopup = () => {
+    setIsClosingPopup(true);
+    setTimeout(() => {
+      setShowFilterPopup(false);
+      setIsClosingPopup(false);
+    }, 300);
+  };
+
+  const fillTable = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/get-tickets', {
+        method: 'GET',
+      });
+      const data = await res.json();
+      const parsed = data.map((t: any) => ({
+        ...t,
+        created_at: new Date(t.created_at),
+        updated_at: new Date(t.updated_at),
+      }));
+
+      setTickets(parsed);
+      console.log(parsed);
+    } catch (err) {
+      console.error('Error loading tickets', err);
+    }
+  };
+
+
   const router = useRouter();
+  const tableHeaders = [
+    'Info',
+    'Title',
+    'Description',
+    'Status',
+    'Priority',
+    'Created At',
+    'Updated At',
+    'Submitted By',
+    'Related Incidents',
+    'Related Devices'
+  ];
+
+  const selectColumns = [
+    'No Filter',
+    'Title',
+    'Status',
+    'Priority',
+    'Created At',
+    'Updated At',
+    'Submitted By'
+  ];
+
+
   const handleLogout = async () => {
     try {
       await fetch('http://localhost:8080/api/logout', {
@@ -52,29 +120,58 @@ const DaemonView = () => {
   const handleProfileClick = () => {
     router.push('/dashboard/profile');
   };
-  {/*useEffect(() => {
+  {
+    useEffect(() => {
+      const fetchUser = async () => {
+        try {
+          const res = await fetch('http://localhost:8080/api/check-auth', {
+            method: 'GET',
+            credentials: 'include'
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            setUsername(data.user.username);
+          }
+          else {
+            router.push('/login')
+          }
+        }
+        catch (err) {
+          console.error('Auth check failed', err);
+          router.push('/login')
+        }
+      };
+
+      fetchUser();
+    })
+  }
+
+  useEffect(() => {
+    fillTable();
+
     const fetchUser = async () => {
       try {
         const res = await fetch('http://localhost:8080/api/check-auth', {
           method: 'GET',
-          credentials: 'include'
+          credentials: 'include',
         });
 
         if (res.ok) {
           const data = await res.json();
           setUsername(data.user.username);
+        } else {
+          router.push('/login');
         }
-        else {
-          router.push('/login')
-        }
-      }
-      catch (err) {
+      } catch (err) {
         console.error('Auth check failed', err);
-        router.push('/login')
+        router.push('/login');
       }
     };
+
     fetchUser();
-  })*/}
+  }, []);
+
 
   return (
     <Container>
@@ -97,8 +194,6 @@ const DaemonView = () => {
               {/* conditionally render the close or menu icon based on sidebarOpen state */}
               {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
             </SidebarToggle>
-            {/* search bar */}
-            <SearchBar placeholder="Search for ..." />
           </LeftHeader>
 
           {/* title image */}
@@ -106,7 +201,7 @@ const DaemonView = () => {
 
           {/* user area showing user profile icon and username */}
           <UserArea>
-            <ProfileIcon onClick={handleProfileClick} />
+            <ProfileIcon onClick={handleProfileClick} /> {username}
             <LogoutIcon onClick={handleLogout} />
           </UserArea>
 
@@ -130,34 +225,74 @@ const DaemonView = () => {
               <FiSearch />
             </TableSearch>
             {/* filter button for table */}
-            <TableActions>
-              <FiFilter />
-            </TableActions>
+            <FilterWrapper>
+              <TableActions onClick={() => {
+                if (showFilterPopup) {
+                  closePopup();
+                } else {
+                  setShowFilterPopup(true);
+                }
+              }}>
+                <FiFilter />
+              </TableActions>
+
+
+              {showFilterPopup && (
+                <FilterPopup $isClosing={isClosingPopup}>
+                  <h4>Filter Options</h4>
+                  <label>
+                    Column:
+                    <select>
+                      {selectColumns.map((header, idx) => (
+                        <option key={idx} value={header}>{header}</option>
+                      ))}
+                    </select>
+
+                  </label>
+                  <label>
+                    Value:
+                    <input type="text" placeholder="Enter value" />
+                  </label>
+                  <button onClick={closePopup}>Apply</button>
+                </FilterPopup>
+              )}
+
+            </FilterWrapper>
+
+
           </TableHeader>
 
           {/* table for data */}
           <Table>
             <thead>
               <tr>
-                {/* creating table headers dynamically */}
-                {Array.from({ length: 10 }, (_, idx) => (
-                  <th key={`col-${idx}`}>Col{idx + 1}</th>
+                {tableHeaders.map((header, idx) => (
+                  <th key={`col-${idx}`}>{header}</th>
                 ))}
+
               </tr>
             </thead>
             <tbody>
               {/* creating table rows dynamically */}
-              {Array.from({ length: 10 }, (_, idx) => (
-                <tr key={`row-${idx}`}>
+              {tickets.map((ticket, idx) => (
+                <tr key={`ticket-${idx}`}>
+                  <td><FiInfo /></td>
+                  <td>{ticket.ticket_title}</td>
+                  <td>{ticket.description}</td>
+                  <td>{ticket.status}</td>
                   <td>
-                    <FiInfo />
+                    <PriorityBadge level={ticket.priority}>
+                      {ticket.priority}
+                    </PriorityBadge>
                   </td>
-                  {/* filling in dummy data for the table cells */}
-                  {Array.from({ length: 9 }, (_, i) => (
-                    <td key={`cell-${idx}-${i}`}>Dummy</td>
-                  ))}
+                  <td>{ticket.created_at.toLocaleString()}</td>
+                  <td>{ticket.updated_at.toLocaleString()}</td>
+                  <td>{ticket.submitted_by}</td>
+                  <td>{ticket.related_incident_title}</td>
+                  <td>{ticket.related_device_name}</td>
                 </tr>
               ))}
+
             </tbody>
           </Table>
         </TableSection>
@@ -182,8 +317,32 @@ const glow = keyframes`
   }
 `;
 
+const slideDownFadeIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+const slideUpFadeOut = keyframes`
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+`;
+
+
 
 // styled components
+
 const Container = styled.div`
   display: flex;
   height: 100vh;
@@ -191,6 +350,21 @@ const Container = styled.div`
   color: #fff;
   font-family: 'Orbitron', sans-serif;
   transition: background-color 0.3s ease;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('/images/background.png');
+    background-size: cover;
+    background-position: center;
+    opacity: 0.15; /* Lower = more faded */
+    pointer-events: none;
+    z-index: 0;
+  }
 `;
 
 const Sidebar = styled.div<{ $isOpen: boolean }>`
@@ -375,7 +549,7 @@ const Table = styled.table`
   th,
   td {
     padding: 12px;
-    text-align: left;
+    text-align: center;
     border-bottom: 1px solid #2a274f;
   }
 
@@ -436,4 +610,96 @@ const LogoutIcon = styled(FiLogOut)`
     color: #ff5b5b;
     animation: ${redGlow} 2s ease-in-out infinite;
   }
+`;
+
+const FilterPopup = styled.div<{ $isClosing: boolean }>`
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background-color: #1a1839;
+  border: 1px solid #635bff;
+  border-radius: 12px;
+  padding: 16px;
+  z-index: 99;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 220px;
+  animation: ${({ $isClosing }) => $isClosing ? slideUpFadeOut : slideDownFadeIn} 0.3s ease forwards;
+
+  h4 {
+    margin: 0;
+    color: #fff;
+    font-size: 16px;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    color: #aaa;
+    font-size: 14px;
+  }
+
+  input, select {
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: none;
+    background-color: #2a274f;
+    color: #fff;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1.41.59L6 5.17l4.59-4.58L12 2l-6 6-6-6z' fill='%23ffffff'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px 8px;
+    padding-right: 32px;
+    cursor: pointer;
+  }
+
+  button {
+    margin-top: 8px;
+    background-color: #635bff;
+    border: none;
+    padding: 8px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: 0.3s ease;
+
+    &:hover {
+      background-color: #4e49c4;
+    }
+  }
+`;
+
+const FilterWrapper = styled.div`
+  position: relative;
+  display: inline-block;
+`;
+
+const PriorityBadge = styled.span<{ level: string }>`
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  text-transform: capitalize;
+  color: white;
+
+  background-color: ${({ level }) => {
+    switch (level.toLowerCase()) {
+      case 'high':
+        return '#ff4d4d';
+      case 'medium':
+        return '#f5a623';
+      case 'low':
+        return '#27ae60';
+      default:
+        return '#555';
+    }
+  }};
 `;

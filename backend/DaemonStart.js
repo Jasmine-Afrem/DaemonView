@@ -4,10 +4,9 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var cors = require('cors');
-var bcrypt = require('bcrypt');
 var session = require('express-session');
 
-var authRouter = require('./routes/auth');
+var APIS = require('./routes/api');
 
 var app = express();
 
@@ -35,7 +34,7 @@ app.use(session({
   }
 }));
 
-app.use('/api', authRouter);
+app.use('/api', APIS);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
