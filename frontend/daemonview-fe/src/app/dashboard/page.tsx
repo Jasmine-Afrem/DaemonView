@@ -52,6 +52,10 @@ const DaemonView = () => {
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [isClosingPopup, setIsClosingPopup] = useState(false);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);  // Current page index
+  const [totalPages, setTotalPages] = useState(1);
+  const ticketsPerPage = 5;  // Adjust the number of tickets per page
+
   const closePopup = () => {
     setIsClosingPopup(true);
     setTimeout(() => {
@@ -60,30 +64,40 @@ const DaemonView = () => {
     }, 300);
   };
 
-  const fillTable = async () => {
+  const fillTable = async (pageIndex = 1) => {
     try {
-      const res = await fetch('http://localhost:8080/api/get-tickets', {
-        method: 'GET',
-      });
+      const res = await fetch(`http://localhost:8080/api/get-tickets?page=${pageIndex}&limit=5`);
+
+      if (!res.ok) throw new Error('Failed to fetch tickets');
+
       const data = await res.json();
-      const parsed = data.map((t: any) => ({
+
+      const parsed = data.tickets.map((t: any) => ({
         ...t,
         created_at: new Date(t.created_at),
         updated_at: new Date(t.updated_at),
       }));
 
       setTickets(parsed);
-      console.log(parsed);
+      setTotalPages(data.totalPages);
     } catch (err) {
       console.error('Error loading tickets', err);
     }
   };
 
+  // Fetch the tickets table when the page changes
+  useEffect(() => {
+    fillTable(currentPage);
+  }, [currentPage]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const router = useRouter();
   const tableHeaders = [
     'Info',
-    'Title',
+    'Ticket ID',
     'Description',
     'Status',
     'Priority',
@@ -104,7 +118,6 @@ const DaemonView = () => {
     'Submitted By'
   ];
 
-
   const handleLogout = async () => {
     try {
       await fetch('http://localhost:8080/api/logout', {
@@ -117,6 +130,7 @@ const DaemonView = () => {
       console.error('Logout failed:', error);
     }
   };
+
   const handleProfileClick = () => {
     router.push('/dashboard/profile');
   };
@@ -146,31 +160,6 @@ const DaemonView = () => {
       fetchUser();
     })
   }
-
-  useEffect(() => {
-    fillTable();
-
-    const fetchUser = async () => {
-      try {
-        const res = await fetch('http://localhost:8080/api/check-auth', {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          setUsername(data.user.username);
-        } else {
-          router.push('/login');
-        }
-      } catch (err) {
-        console.error('Auth check failed', err);
-        router.push('/login');
-      }
-    };
-
-    fetchUser();
-  }, []);
 
 
   return (
@@ -295,6 +284,60 @@ const DaemonView = () => {
 
             </tbody>
           </Table>
+
+          <StyledPagination>
+            <PageNavButton
+              disabled={currentPage <= 1}
+              onClick={() => handlePageChange(currentPage - 1)}
+            >
+              ←
+            </PageNavButton>
+
+            {/* Always show page 1 */}
+            <PageNumberButton
+              $active={currentPage === 1}
+              onClick={() => handlePageChange(1)}
+            >
+              1
+            </PageNumberButton>
+
+            {/* Ellipsis after 1 */}
+            {currentPage > 3 && <span>...</span>}
+
+            {/* Pages around current (e.g., 3, 4, 5 if current is 4) */}
+            {Array.from({ length: 3 }, (_, i) => currentPage - 1 + i)
+              .filter((page) => page > 1 && page < totalPages)
+              .map((page) => (
+                <PageNumberButton
+                  key={page}
+                  $active={page === currentPage}
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </PageNumberButton>
+              ))}
+
+            {/* Ellipsis before last page */}
+            {currentPage < totalPages - 2 && <span>...</span>}
+
+            {/* Always show last page */}
+            {totalPages > 1 && (
+              <PageNumberButton
+                $active={currentPage === totalPages}
+                onClick={() => handlePageChange(totalPages)}
+              >
+                {totalPages}
+              </PageNumberButton>
+            )}
+
+            <PageNavButton
+              disabled={currentPage >= totalPages}
+              onClick={() => handlePageChange(currentPage + 1)}
+            >
+              →
+            </PageNavButton>
+          </StyledPagination>
+
         </TableSection>
       </Content>
     </Container>
@@ -702,4 +745,41 @@ const PriorityBadge = styled.span<{ level: string }>`
         return '#555';
     }
   }};
+`;
+
+const StyledPagination = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  gap: 10px;
+  flex-wrap: wrap;
+`;
+
+const PageNavButton = styled.button`
+  background-color: #1a1839;
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+
+  &:hover:not(:disabled) {
+    background-color: #635bff;
+    animation: ${glow} 2s ease-in-out infinite;
+    transform: scale(1.05);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`;
+
+const PageNumberButton = styled(PageNavButton)<{ $active: boolean }>`
+  background-color: ${({ $active }) => ($active ? '#635bff' : '#1a1839')};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 0 10px #635bff, 0 0 20px #635bff' : 'none'};
 `;

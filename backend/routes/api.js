@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '4.tcp.eu.ngrok.io',
+  host: '0.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 12167,
+  port: 11167,
 }).promise();
 
 // GET /api/check-auth
@@ -23,11 +23,29 @@ router.get('/check-auth', (req, res) => {
 // GET /api/get-tickets
 router.get('/get-tickets', async (req, res) => {
   try {
-    const [tickets] = await db.query('SELECT * FROM tickets');
-    console.log(tickets);
-    res.json(tickets);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    // Get paginated tickets
+    const [tickets] = await db.query(
+      'SELECT * FROM tickets ORDER BY ticket_id DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+
+    // Get total count
+    const [countResult] = await db.query('SELECT COUNT(*) as total FROM tickets');
+    const totalCount = countResult[0].total;
+
+    res.json({
+      tickets,
+      total: totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
+    });
   } catch (err) {
-    res.status(500).json({ message: 'Server error during registration' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error while fetching tickets' });
   }
 });
 

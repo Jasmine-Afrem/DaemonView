@@ -10,7 +10,7 @@ const ProfilePage = () => {
   const [userInfo, setUserInfo] = useState({
     username: 'John Doe',
     email: 'john.doe@example.com',
-    password: 'password123',
+    password: 'password',
     avatar: '',
   });
 
