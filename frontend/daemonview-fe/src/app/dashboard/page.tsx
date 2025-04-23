@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useEffect } from 'react';
+
 import styled from 'styled-components';
 import {
   FiSearch,
@@ -49,12 +50,138 @@ const sidebarIcons = [
 const DaemonView = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true); // sidebar open/close status
   const [username, setUsername] = useState('');
-  const [showFilterPopup, setShowFilterPopup] = useState(false);
-  const [isClosingPopup, setIsClosingPopup] = useState(false);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [currentPage, setCurrentPage] = useState(1);  // Current page index
   const [totalPages, setTotalPages] = useState(1);
-  const ticketsPerPage = 5;  // Adjust the number of tickets per page
+  const [pageSize, setPageSize] = useState(10); 
+  const [selectedColumn, setSelectedColumn] = useState('');
+  const [filterValue, setFilterValue] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [isClosingPopup, setIsClosingPopup] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState<Map<string, string>>(new Map());
+
+
+  const statusOptions = ['In_Progress', 'Closed', 'Resolved', 'Open'];
+  const priorityOptions = ['Low', 'Medium', 'High', 'Urgent'];
+
+  useEffect(() => {
+    setFilterValue('');
+    setFilterDate('');
+  }, [selectedColumn]);
+
+  const handleApplyFilter = async () => {
+    if (selectedColumn && (filterValue || filterDate)) {
+      const newKey = `${selectedColumn}: ${filterValue || filterDate}`;
+  
+      // Create a new filters map locally and update state later
+      const updatedFilters = new Map(appliedFilters);
+      for (let [key, column] of updatedFilters.entries()) {
+        if (column === selectedColumn) {
+          updatedFilters.delete(key);
+        }
+      }
+      updatedFilters.set(newKey, selectedColumn);
+  
+      // Now update the state
+      setAppliedFilters(updatedFilters);
+  
+      // Build query params from the updatedFilters (NOT the old state)
+      const queryParams = new URLSearchParams();
+      updatedFilters.forEach((column, filterKey) => {
+        const [filterColumn, value] = filterKey.split(': ');
+        if (filterColumn && value) {
+          queryParams.append(filterColumn.toLowerCase(), value);
+        }
+      });
+  
+      queryParams.append('page', currentPage.toString());
+      queryParams.append('limit', pageSize.toString());
+  
+      try {
+        const res = await fetch(`http://localhost:8080/api/get-tickets?${queryParams.toString()}`);
+  
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Invalid JSON response');
+        }
+  
+        const data = await res.json();
+  
+        if (res.ok) {
+          const ticketsWithDates = data.tickets.map((t: { created_at: string | number | Date; updated_at: string | number | Date; }) => ({
+            ...t,
+            created_at: t.created_at ? new Date(t.created_at) : 'N/A',
+            updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',   
+          }));
+  
+          setTickets(ticketsWithDates);
+          setTotalPages(data.totalPages);
+        } else {
+          console.error('API error:', data);
+        }
+      } catch (err) {
+        if (err instanceof Error) {
+          console.error('Failed to fetch tickets:', err.message);
+        } else {
+          console.error('Failed to fetch tickets:', err);
+        }
+        
+      }
+    }
+  };
+  
+  const handleRemoveFilter = async (filterKey: string) => {
+    const updatedFilters = new Map(appliedFilters);
+    updatedFilters.delete(filterKey);
+    setAppliedFilters(updatedFilters);
+  
+    const queryParams = new URLSearchParams();
+  
+    // Only add filters if there are any left
+    if (updatedFilters.size > 0) {
+      updatedFilters.forEach((column, key) => {
+        const [filterColumn, value] = key.split(': ');
+        if (filterColumn && value) {
+          queryParams.append(filterColumn.toLowerCase(), value);
+        }
+      });
+    }
+  
+    // Always include pagination params
+    queryParams.append('page', currentPage.toString());
+    queryParams.append('limit', pageSize.toString());
+  
+    try {
+      const res = await fetch(`http://localhost:8080/api/get-tickets?${queryParams.toString()}`);
+  
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid JSON response');
+      }
+  
+      const data = await res.json();
+  
+      if (res.ok) {
+        const ticketsWithDates = data.tickets.map((t: any) => ({
+          ...t,
+          created_at: t.created_at ? new Date(t.created_at) : 'N/A',
+          updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',   
+        }));
+  
+        setTickets(ticketsWithDates);
+        setTotalPages(data.totalPages);
+      } else {
+        console.error('API error:', data);
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Failed to fetch tickets:', err.message);
+      } else {
+        console.error('Failed to fetch tickets:', err);
+      }
+    }
+  };  
 
   const closePopup = () => {
     setIsClosingPopup(true);
@@ -66,7 +193,7 @@ const DaemonView = () => {
 
   const fillTable = async (pageIndex = 1) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/get-tickets?page=${pageIndex}&limit=5`);
+      const res = await fetch(`http://localhost:8080/api/get-tickets?page=${pageIndex}&limit=10`);
 
       if (!res.ok) throw new Error('Failed to fetch tickets');
 
@@ -74,8 +201,8 @@ const DaemonView = () => {
 
       const parsed = data.tickets.map((t: any) => ({
         ...t,
-        created_at: new Date(t.created_at),
-        updated_at: new Date(t.updated_at),
+        created_at: t.created_at ? new Date(t.created_at) : 'N/A',
+        updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',        
       }));
 
       setTickets(parsed);
@@ -109,13 +236,10 @@ const DaemonView = () => {
   ];
 
   const selectColumns = [
-    'No Filter',
-    'Title',
     'Status',
     'Priority',
-    'Created At',
-    'Updated At',
-    'Submitted By'
+    'Created_At',
+    'Submitted_By'
   ];
 
   const handleLogout = async () => {
@@ -213,39 +337,128 @@ const DaemonView = () => {
               <input type="text" placeholder="Search for ..." />
               <FiSearch />
             </TableSearch>
+
+            {/* Display applied filters */}
+            {appliedFilters.size > 0 && (
+              <AppliedFilters>
+                {Array.from(appliedFilters.keys()).map((filterKey, idx) => (
+                  <FilterTag key={idx}>
+                    {filterKey}
+                    <FilterTagX onClick={() => handleRemoveFilter(filterKey)} />
+                  </FilterTag>
+                ))}
+              </AppliedFilters>
+            )}
+
             {/* filter button for table */}
             <FilterWrapper>
-              <TableActions onClick={() => {
-                if (showFilterPopup) {
-                  closePopup();
-                } else {
-                  setShowFilterPopup(true);
-                }
-              }}>
+              <TableActions
+                onClick={() => {
+                  if (showFilterPopup) {
+                    closePopup();
+                  } else {
+                    setShowFilterPopup(true);
+                  }
+                }}
+              >
                 <FiFilter />
               </TableActions>
-
-
               {showFilterPopup && (
-                <FilterPopup $isClosing={isClosingPopup}>
+                <FilterPopup
+                  $isClosing={isClosingPopup}
+                  onClick={(e) => e.stopPropagation()} // Prevent popup from closing when clicking inside
+                >
                   <h4>Filter Options</h4>
-                  <label>
+                  <label className={selectedColumn ? 'active' : ''}>
                     Column:
-                    <select>
+                    <select
+                      value={selectedColumn}
+                      onChange={(e) => setSelectedColumn(e.target.value)}
+                      onClick={(e) => e.stopPropagation()} // Prevent dropdown click from bubbling
+                    >
+                      <option value="" disabled>Select column</option>
                       {selectColumns.map((header, idx) => (
                         <option key={idx} value={header}>{header}</option>
                       ))}
                     </select>
+                  </label>
 
-                  </label>
-                  <label>
-                    Value:
-                    <input type="text" placeholder="Enter value" />
-                  </label>
-                  <button onClick={closePopup}>Apply</button>
+                  {/* Status filter */}
+                  {selectedColumn === 'Status' && (
+                    <label className={filterValue ? 'active' : ''}>
+                      Status:
+                      <select
+                        value={filterValue}
+                        onChange={(e) => setFilterValue(e.target.value)}
+                        onClick={(e) => e.stopPropagation()} // Prevent dropdown click from bubbling
+                      >
+                        <option value="" disabled>Select status</option>
+                        {statusOptions.map((status, idx) => (
+                          <option key={idx} value={status}>{status}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
+                  {/* Priority filter */}
+                  {selectedColumn === 'Priority' && (
+                    <label className={filterValue ? 'active' : ''}>
+                      Priority:
+                      <select
+                        value={filterValue}
+                        onChange={(e) => setFilterValue(e.target.value)}
+                        onClick={(e) => e.stopPropagation()} // Prevent dropdown click from bubbling
+                      >
+                        <option value="" disabled>Select priority</option>
+                        {priorityOptions.map((priority, idx) => (
+                          <option key={idx} value={priority}>{priority}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
+                  {/* Created At filter */}
+                  {selectedColumn === 'Created_At' && (
+                    <label className={filterDate ? 'active' : ''}>
+                      Created At:
+                      <input
+                        type="date"
+                        value={filterDate || ''} // expects yyyy-mm-dd
+                        onChange={(e) => {
+                          setFilterDate(e.target.value); // store as yyyy-mm-dd directly
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        max={new Date().toISOString().split('T')[0]}
+                      />
+                    </label>
+                  )}
+
+                  {/* Submitted By filter */}
+                  {selectedColumn === 'Submitted_By' && (
+                    <label className={filterValue ? 'active' : ''}>
+                      Submitted By:
+                      <input
+                        type="text"
+                        placeholder="Enter name"
+                        value={filterValue}
+                        onChange={(e) => setFilterValue(e.target.value)}
+                        onClick={(e) => e.stopPropagation()} // Prevent input click from bubbling
+                      />
+                    </label>
+                  )}
+
+                <button
+                  disabled={!selectedColumn || (!filterValue && !filterDate)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApplyFilter();
+                  }}
+                >
+                  Apply
+                </button>
+
                 </FilterPopup>
               )}
-
             </FilterWrapper>
 
 
@@ -266,22 +479,25 @@ const DaemonView = () => {
               {tickets.map((ticket, idx) => (
                 <tr key={`ticket-${idx}`}>
                   <td><FiInfo /></td>
-                  <td>{ticket.ticket_title}</td>
-                  <td>{ticket.description}</td>
-                  <td>{ticket.status}</td>
+                  <td>{ticket.ticket_title || 'No ID'}</td>
+                  <td>{ticket.description || 'No Description'}</td>
+                  <td>{ticket.status || 'No Status'}</td>
                   <td>
-                    <PriorityBadge level={ticket.priority}>
-                      {ticket.priority}
-                    </PriorityBadge>
+                    {ticket.priority ? (
+                      <PriorityBadge level={ticket.priority}>
+                        {ticket.priority}
+                      </PriorityBadge>
+                    ) : (
+                      <PriorityBadge level="unknown">Not Set</PriorityBadge>
+                    )}
                   </td>
-                  <td>{ticket.created_at.toLocaleString()}</td>
-                  <td>{ticket.updated_at.toLocaleString()}</td>
-                  <td>{ticket.submitted_by}</td>
-                  <td>{ticket.related_incident_title}</td>
-                  <td>{ticket.related_device_name}</td>
+                  <td>{ticket.created_at?.toLocaleString()}</td>
+                  <td>{ticket.updated_at?.toLocaleString()}</td>
+                  <td>{ticket.submitted_by || 'Anonymous'}</td>
+                  <td>{ticket.related_incident_title || 'No Related Incident'}</td>
+                  <td>{ticket.related_device_name || 'No Device Name'}</td>
                 </tr>
               ))}
-
             </tbody>
           </Table>
 
@@ -682,6 +898,12 @@ const FilterPopup = styled.div<{ $isClosing: boolean }>`
     flex-direction: column;
     color: #aaa;
     font-size: 14px;
+    label.active select,
+
+    label.active input {
+      box-shadow: 0 0 6px #635bff;
+      border: 1px solid #635bff;
+    }
   }
 
   input, select {
@@ -725,6 +947,54 @@ const FilterWrapper = styled.div`
   display: inline-block;
 `;
 
+const SelectedFilters = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+`;
+
+const redGlowFilter = keyframes`
+  0% {
+    box-shadow: 0 0 10px rgba(255, 91, 91, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 91, 91, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(255, 91, 91, 0.4);
+  }
+`;
+
+const FilterTag = styled.div`
+  background-color: #635bff;
+  color: white;
+  padding: 5px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  transition: transform 0.2s ease;
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px #635bff, 0 0 20px #635bff; /* Added hover effect */
+  }
+
+  /* Hover effect on "X" button */
+  svg {
+    cursor: pointer;
+    transition: 0.3s ease;
+    &:hover {
+      color: #ff5b5b;  /* Red color on hover */
+      animation: ${redGlowFilter} 0.5s ease-in-out;
+      transform: scale(1.2);  /* Grow slightly */
+    }
+  }
+`;
+
 const PriorityBadge = styled.span<{ level: string }>`
   padding: 6px 12px;
   border-radius: 20px;
@@ -742,7 +1012,7 @@ const PriorityBadge = styled.span<{ level: string }>`
       case 'low':
         return '#27ae60';
       default:
-        return '#555';
+        return '#555'; // this already handles unknowns
     }
   }};
 `;
@@ -782,4 +1052,21 @@ const PageNumberButton = styled(PageNavButton)<{ $active: boolean }>`
   background-color: ${({ $active }) => ($active ? '#635bff' : '#1a1839')};
   box-shadow: ${({ $active }) =>
     $active ? '0 0 10px #635bff, 0 0 20px #635bff' : 'none'};
+`;
+
+const AppliedFilters = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  margin-right: 0.5rem;
+  flex-wrap: wrap; /* Allow wrapping for longer filter lists */
+  padding: 6px;
+  border-radius: 15px;
+  align-items: center;
+`;
+
+const FilterTagX = styled(FiX)`
+  font-size: 17px;
+  color: #ffffff;
+  transition: color 0.3s ease, transform 0.3s ease;
 `;

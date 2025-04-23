@@ -8,7 +8,7 @@ const db = mysql.createPool({
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 11167,
+  port: 17896,
 }).promise();
 
 // GET /api/check-auth
@@ -23,31 +23,35 @@ router.get('/check-auth', (req, res) => {
 // GET /api/get-tickets
 router.get('/get-tickets', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const offset = (page - 1) * limit;
+    const page = parseInt(req.query.page) || 1;
 
-    // Get paginated tickets
-    const [tickets] = await db.query(
-      'SELECT * FROM tickets ORDER BY ticket_id DESC LIMIT ? OFFSET ?',
-      [limit, offset]
+    const status = req.query.status || null;
+    const priority = req.query.priority || null;
+    const created_at = req.query.created_at || null;
+    const submitted_by = req.query.submitted_by || null;
+
+    const [results] = await db.query(
+      'CALL get_tickets_filtered(?, ?, ?, ?, ?, ?)',
+      [limit, page, status, priority, created_at, submitted_by]
     );
 
-    // Get total count
-    const [countResult] = await db.query('SELECT COUNT(*) as total FROM tickets');
-    const totalCount = countResult[0].total;
+    const paginatedTickets = results[0];
+    const totalCount = results[1][0]?.total ?? 0;
 
     res.json({
-      tickets,
+      tickets: paginatedTickets,
       total: totalCount,
       page,
       totalPages: Math.ceil(totalCount / limit),
     });
+
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching filtered tickets:', err);
     res.status(500).json({ message: 'Server error while fetching tickets' });
   }
 });
+
 
 // POST /api/register
 router.post('/register', async (req, res) => {
