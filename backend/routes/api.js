@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '0.tcp.eu.ngrok.io',
+  host: '4.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 17896,
+  port: 14402,
 }).promise();
 
 // GET /api/check-auth
@@ -52,6 +52,61 @@ router.get('/get-tickets', async (req, res) => {
   }
 });
 
+// PUT /api/update-ticket-status
+router.put('/update-ticket', async (req, res) => {
+  const { ticket_id, status, assigned_to_name } = req.body;
+
+  if (!ticket_id || (!status && !assigned_to_name)) {
+    return res.status(400).json({ message: 'Missing data to update' });
+  }
+
+  try {
+    let assignedToId = null;
+
+    if (assigned_to_name) {
+      const [userResult] = await db.query(
+        'SELECT id FROM users WHERE username = ?',
+        [assigned_to_name]
+      );
+
+      if (userResult.length === 0) {
+        return res.status(404).json({ message: 'Assigned user not found' });
+      }
+
+      assignedToId = userResult[0].id;
+    }
+
+    const updateFields = [];
+    const updateValues = [];
+
+    if (status) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+    }
+
+    if (assignedToId !== null) {
+      updateFields.push('assigned_to = ?');
+      updateValues.push(assignedToId);
+    }
+
+    // Always update updated_at
+    updateFields.push('updated_at = NOW()');
+
+    updateValues.push(ticket_id); // For WHERE clause
+
+    const updateQuery = `
+      UPDATE tickets_raw
+      SET ${updateFields.join(', ')}
+      WHERE ticket_id = ?
+    `;
+
+    await db.query(updateQuery, updateValues);
+
+  } catch (err) {
+    console.error('Error updating ticket:', err);
+    res.status(500).json({ message: 'Server error while updating ticket' });
+  }
+});
 
 // POST /api/register
 router.post('/register', async (req, res) => {

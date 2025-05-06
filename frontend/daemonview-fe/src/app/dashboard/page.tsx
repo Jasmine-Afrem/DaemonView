@@ -6,6 +6,11 @@ import { useEffect } from 'react';
 
 import styled from 'styled-components';
 import {
+  FiRefreshCcw,
+  FiEdit,
+  FiGrid,
+  FiTag,
+  FiUsers,
   FiSearch,
   FiInfo,
   FiFilter,
@@ -22,38 +27,37 @@ import {
   FiHelpCircle,
 } from 'react-icons/fi';
 import '../globals.css';
+import EditTicketModal from './components/EditModal';
 
-type Ticket = {
-  ticket_title: string;
+export type Ticket = {
+  ticket_id: string;
   description: string;
   status: string;
   priority: string;
   created_at: Date;
   updated_at: Date;
   submitted_by: string;
-  related_incident_title: string;
-  related_device_name: string;
+  assigned_to?: string;
+  close_date?: Date;
+  completed_date?: Date;
+  sla_hours: number;
+  deadline: Date;
+  within_sla: boolean;
+  related_incidents?: string;
+  related_devices?: string;
 };
 
 
 // sidebar items array
-const sidebarIcons = [
-  { icon: <FiHome />, label: 'Home' },
-  { icon: <FiBarChart2 />, label: 'Stats' },
-  { icon: <FiAlertCircle />, label: 'Alerts' },
-  { icon: <FiClock />, label: 'History' },
-  { icon: <FiServer />, label: 'Servers' },
-  { icon: <FiSettings />, label: 'Settings' },
-  { icon: <FiHelpCircle />, label: 'Help' },
-];
 
 const DaemonView = () => {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true); // sidebar open/close status
   const [username, setUsername] = useState('');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [currentPage, setCurrentPage] = useState(1);  // Current page index
   const [totalPages, setTotalPages] = useState(1);
-  const [pageSize, setPageSize] = useState(10); 
+  const [pageSize, setPageSize] = useState(10);
   const [selectedColumn, setSelectedColumn] = useState('');
   const [filterValue, setFilterValue] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -63,17 +67,76 @@ const DaemonView = () => {
 
 
   const statusOptions = ['In_Progress', 'Closed', 'Resolved', 'Open'];
-  const priorityOptions = ['Low', 'Medium', 'High', 'Urgent'];
+  const priorityOptions = ['Low', 'Medium', 'High', 'Critical'];
+
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+
+  const sidebarIcons = [
+    { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
+    { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
+    { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
+    { icon: <FiAlertCircle />, label: 'Alerts' },
+    { icon: <FiClock />, label: 'History' },
+    { icon: <FiServer />, label: 'Servers' },
+    { icon: <FiSettings />, label: 'Settings' },
+    { icon: <FiHelpCircle />, label: 'Help' },
+  ];
+
+
 
   useEffect(() => {
     setFilterValue('');
     setFilterDate('');
   }, [selectedColumn]);
 
+  const handleUpdateTicket = async (updatedTicket: Partial<Ticket>) => {
+    try {
+      const res = await fetch('http://localhost:8080/api/update-ticket', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ticket_id: updatedTicket.ticket_id,
+          status: updatedTicket.status,
+          assigned_to_name: updatedTicket.assigned_to,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error('Update failed:', data.message);
+        return;
+      }
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.ticket_id === data.ticket.ticket_id
+            ? {
+              ...t,
+              status: data.ticket.status,
+              assigned_to: data.ticket.assigned_to_name,
+              updated_at: new Date(data.ticket.updated_at),
+            }
+            : t
+        )
+      );
+
+      console.log('Ticket updated successfully');
+    } catch (err) {
+      console.error('Update error:', err);
+    }
+
+    setShowEditModal(false);
+  };
+
+
   const handleApplyFilter = async () => {
     if (selectedColumn && (filterValue || filterDate)) {
       const newKey = `${selectedColumn}: ${filterValue || filterDate}`;
-  
+
       // Create a new filters map locally and update state later
       const updatedFilters = new Map(appliedFilters);
       for (let [key, column] of updatedFilters.entries()) {
@@ -82,11 +145,9 @@ const DaemonView = () => {
         }
       }
       updatedFilters.set(newKey, selectedColumn);
-  
-      // Now update the state
+
       setAppliedFilters(updatedFilters);
-  
-      // Build query params from the updatedFilters (NOT the old state)
+
       const queryParams = new URLSearchParams();
       updatedFilters.forEach((column, filterKey) => {
         const [filterColumn, value] = filterKey.split(': ');
@@ -94,27 +155,27 @@ const DaemonView = () => {
           queryParams.append(filterColumn.toLowerCase(), value);
         }
       });
-  
+
       queryParams.append('page', currentPage.toString());
       queryParams.append('limit', pageSize.toString());
-  
+
       try {
         const res = await fetch(`http://localhost:8080/api/get-tickets?${queryParams.toString()}`);
-  
+
         const contentType = res.headers.get('content-type');
         if (!contentType || !contentType.includes('application/json')) {
           throw new Error('Invalid JSON response');
         }
-  
+
         const data = await res.json();
-  
+
         if (res.ok) {
           const ticketsWithDates = data.tickets.map((t: { created_at: string | number | Date; updated_at: string | number | Date; }) => ({
             ...t,
             created_at: t.created_at ? new Date(t.created_at) : 'N/A',
-            updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',   
+            updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',
           }));
-  
+
           setTickets(ticketsWithDates);
           setTotalPages(data.totalPages);
         } else {
@@ -126,18 +187,18 @@ const DaemonView = () => {
         } else {
           console.error('Failed to fetch tickets:', err);
         }
-        
+
       }
     }
   };
-  
+
   const handleRemoveFilter = async (filterKey: string) => {
     const updatedFilters = new Map(appliedFilters);
     updatedFilters.delete(filterKey);
     setAppliedFilters(updatedFilters);
-  
+
     const queryParams = new URLSearchParams();
-  
+
     // Only add filters if there are any left
     if (updatedFilters.size > 0) {
       updatedFilters.forEach((column, key) => {
@@ -147,28 +208,28 @@ const DaemonView = () => {
         }
       });
     }
-  
+
     // Always include pagination params
     queryParams.append('page', currentPage.toString());
     queryParams.append('limit', pageSize.toString());
-  
+
     try {
       const res = await fetch(`http://localhost:8080/api/get-tickets?${queryParams.toString()}`);
-  
+
       const contentType = res.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         throw new Error('Invalid JSON response');
       }
-  
+
       const data = await res.json();
-  
+
       if (res.ok) {
         const ticketsWithDates = data.tickets.map((t: any) => ({
           ...t,
           created_at: t.created_at ? new Date(t.created_at) : 'N/A',
-          updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',   
+          updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',
         }));
-  
+
         setTickets(ticketsWithDates);
         setTotalPages(data.totalPages);
       } else {
@@ -181,7 +242,7 @@ const DaemonView = () => {
         console.error('Failed to fetch tickets:', err);
       }
     }
-  };  
+  };
 
   const closePopup = () => {
     setIsClosingPopup(true);
@@ -191,37 +252,56 @@ const DaemonView = () => {
     }, 300);
   };
 
-  const fillTable = async (pageIndex = 1) => {
-    try {
-      const res = await fetch(`http://localhost:8080/api/get-tickets?page=${pageIndex}&limit=10`);
+  useEffect(() => {
+    handlePageChange(currentPage);
+  }, [currentPage]);
 
-      if (!res.ok) throw new Error('Failed to fetch tickets');
+  const handlePageChange = async (page: number) => {
+    setCurrentPage(page);
+
+    const queryParams = new URLSearchParams();
+
+    appliedFilters.forEach((column, key) => {
+      const [filterColumn, value] = key.split(': ');
+      if (filterColumn && value) {
+        queryParams.append(filterColumn.toLowerCase(), value);
+      }
+    });
+
+    queryParams.append('page', page.toString());
+    queryParams.append('limit', pageSize.toString());
+
+    try {
+      const res = await fetch(`http://localhost:8080/api/get-tickets?${queryParams.toString()}`);
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid JSON response');
+      }
 
       const data = await res.json();
 
-      const parsed = data.tickets.map((t: any) => ({
-        ...t,
-        created_at: t.created_at ? new Date(t.created_at) : 'N/A',
-        updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',        
-      }));
+      if (res.ok) {
+        const ticketsWithDates = data.tickets.map((t: any) => ({
+          ...t,
+          created_at: t.created_at ? new Date(t.created_at) : 'N/A',
+          updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',
+          close_date: t.close_date ? new Date(t.close_date) : null,
+          completed_date: t.completed_date ? new Date(t.completed_date) : null,
+          deadline: t.deadline ? new Date(t.deadline) : null,
+        }));
 
-      setTickets(parsed);
-      setTotalPages(data.totalPages);
+        setTickets(ticketsWithDates);
+        setTotalPages(data.totalPages);
+      } else {
+        console.error('API error:', data);
+      }
     } catch (err) {
-      console.error('Error loading tickets', err);
+      console.error('Failed to fetch tickets:', err);
     }
   };
 
-  // Fetch the tickets table when the page changes
-  useEffect(() => {
-    fillTable(currentPage);
-  }, [currentPage]);
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
 
-  const router = useRouter();
   const tableHeaders = [
     'Info',
     'Ticket ID',
@@ -231,6 +311,12 @@ const DaemonView = () => {
     'Created At',
     'Updated At',
     'Submitted By',
+    'Assigned To',
+    'Close Date',
+    'Completed Date',
+    'SLA (Hours)',
+    'Deadline',
+    'Within SLA',
     'Related Incidents',
     'Related Devices'
   ];
@@ -258,6 +344,13 @@ const DaemonView = () => {
   const handleProfileClick = () => {
     router.push('/dashboard/profile');
   };
+
+  const handleInfoClick = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    setShowEditModal(true);
+  };
+
+
   {
     useEffect(() => {
       const fetchUser = async () => {
@@ -290,11 +383,13 @@ const DaemonView = () => {
     <Container>
       {/* sidebar is conditionally rendered based on sidebarOpen state */}
       <Sidebar $isOpen={sidebarOpen}>
-        {sidebarIcons.map(({ icon, label }, idx) => (
-          <SidebarButton key={idx} title={label}>
+        {sidebarIcons.map(({ icon, label, onClick }, idx) => (
+          <SidebarButton key={idx} title={label} onClick={onClick}>
             {icon}
           </SidebarButton>
         ))}
+
+
       </Sidebar>
 
 
@@ -320,37 +415,26 @@ const DaemonView = () => {
 
         </Header>
 
-        {/* main action buttons */}
-        <MainButtons>
-          {/* iterating through 7 buttons */}
-          {Array.from({ length: 7 }, (_, idx) => (
-            <MainButton key={`main-btn-${idx}`}>
-              Button {idx + 1}
-            </MainButton>
-          ))}
-        </MainButtons>
 
         {/* table section */}
         <TableSection>
           <TableHeader>
-            <TableSearch>
-              <input type="text" placeholder="Search for ..." />
-              <FiSearch />
-            </TableSearch>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+              <RefreshButton onClick={() => handlePageChange(currentPage)}>
+                <FiRefreshCcw size={16} /> Refresh
+              </RefreshButton>
+              {appliedFilters.size > 0 && (
+                <AppliedFilters>
+                  {Array.from(appliedFilters.keys()).map((filterKey, idx) => (
+                    <FilterTag key={idx}>
+                      {filterKey}
+                      <FilterTagX onClick={() => handleRemoveFilter(filterKey)} />
+                    </FilterTag>
+                  ))}
+                </AppliedFilters>
+              )}
+            </div>
 
-            {/* Display applied filters */}
-            {appliedFilters.size > 0 && (
-              <AppliedFilters>
-                {Array.from(appliedFilters.keys()).map((filterKey, idx) => (
-                  <FilterTag key={idx}>
-                    {filterKey}
-                    <FilterTagX onClick={() => handleRemoveFilter(filterKey)} />
-                  </FilterTag>
-                ))}
-              </AppliedFilters>
-            )}
-
-            {/* filter button for table */}
             <FilterWrapper>
               <TableActions
                 onClick={() => {
@@ -366,7 +450,7 @@ const DaemonView = () => {
               {showFilterPopup && (
                 <FilterPopup
                   $isClosing={isClosingPopup}
-                  onClick={(e) => e.stopPropagation()} // Prevent popup from closing when clicking inside
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <h4>Filter Options</h4>
                   <label className={selectedColumn ? 'active' : ''}>
@@ -374,7 +458,7 @@ const DaemonView = () => {
                     <select
                       value={selectedColumn}
                       onChange={(e) => setSelectedColumn(e.target.value)}
-                      onClick={(e) => e.stopPropagation()} // Prevent dropdown click from bubbling
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <option value="" disabled>Select column</option>
                       {selectColumns.map((header, idx) => (
@@ -390,7 +474,7 @@ const DaemonView = () => {
                       <select
                         value={filterValue}
                         onChange={(e) => setFilterValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()} // Prevent dropdown click from bubbling
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <option value="" disabled>Select status</option>
                         {statusOptions.map((status, idx) => (
@@ -407,7 +491,7 @@ const DaemonView = () => {
                       <select
                         value={filterValue}
                         onChange={(e) => setFilterValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()} // Prevent dropdown click from bubbling
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <option value="" disabled>Select priority</option>
                         {priorityOptions.map((priority, idx) => (
@@ -423,10 +507,8 @@ const DaemonView = () => {
                       Created At:
                       <input
                         type="date"
-                        value={filterDate || ''} // expects yyyy-mm-dd
-                        onChange={(e) => {
-                          setFilterDate(e.target.value); // store as yyyy-mm-dd directly
-                        }}
+                        value={filterDate || ''}
+                        onChange={(e) => setFilterDate(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
                         max={new Date().toISOString().split('T')[0]}
                       />
@@ -442,64 +524,77 @@ const DaemonView = () => {
                         placeholder="Enter name"
                         value={filterValue}
                         onChange={(e) => setFilterValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()} // Prevent input click from bubbling
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </label>
                   )}
 
-                <button
-                  disabled={!selectedColumn || (!filterValue && !filterDate)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleApplyFilter();
-                  }}
-                >
-                  Apply
-                </button>
 
+                  <button
+                    disabled={!selectedColumn || (!filterValue && !filterDate)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleApplyFilter();
+                    }}
+                  >
+                    Apply
+                  </button>
                 </FilterPopup>
               )}
             </FilterWrapper>
-
-
           </TableHeader>
 
-          {/* table for data */}
-          <Table>
-            <thead>
-              <tr>
-                {tableHeaders.map((header, idx) => (
-                  <th key={`col-${idx}`}>{header}</th>
-                ))}
 
-              </tr>
-            </thead>
-            <tbody>
-              {/* creating table rows dynamically */}
-              {tickets.map((ticket, idx) => (
-                <tr key={`ticket-${idx}`}>
-                  <td><FiInfo /></td>
-                  <td>{ticket.ticket_title || 'No ID'}</td>
-                  <td>{ticket.description || 'No Description'}</td>
-                  <td>{ticket.status || 'No Status'}</td>
-                  <td>
-                    {ticket.priority ? (
-                      <PriorityBadge level={ticket.priority}>
-                        {ticket.priority}
-                      </PriorityBadge>
-                    ) : (
-                      <PriorityBadge level="unknown">Not Set</PriorityBadge>
-                    )}
-                  </td>
-                  <td>{ticket.created_at?.toLocaleString()}</td>
-                  <td>{ticket.updated_at?.toLocaleString()}</td>
-                  <td>{ticket.submitted_by || 'Anonymous'}</td>
-                  <td>{ticket.related_incident_title || 'No Related Incident'}</td>
-                  <td>{ticket.related_device_name || 'No Device Name'}</td>
+          <TableContainer>
+            <Table>
+              <thead>
+                <tr>
+                  {tableHeaders.map((header, idx) => (
+                    <th key={`col-${idx}`}>{header}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {tickets.map((ticket, idx) => (
+                  <tr key={`ticket-${idx}`}>
+                    <td>
+                      <FiEdit style={{ cursor: 'pointer' }} onClick={() => handleInfoClick(ticket)} />
+                    </td>
+
+                    <td>{ticket.ticket_id || 'No ID'}</td>
+                    <td>{ticket.description || 'No Description'}</td>
+                    <td>{ticket.status || 'No Status'}</td>
+                    <td>
+                      {ticket.priority ? (
+                        <PriorityBadge level={ticket.priority}>
+                          {ticket.priority}
+                        </PriorityBadge>
+                      ) : (
+                        <PriorityBadge level="unknown">Not Set</PriorityBadge>
+                      )}
+                    </td>
+                    <td>{ticket.created_at ? ticket.created_at.toLocaleString() : 'N/A'}</td>
+                    <td>{ticket.updated_at ? ticket.updated_at.toLocaleString() : 'N/A'}</td>
+                    <td>{ticket.submitted_by || 'Anonymous'}</td>
+                    <td>{ticket.assigned_to || 'Unassigned'}</td>
+                    <td>{ticket.close_date ? ticket.close_date.toLocaleString() : 'Not Closed'}</td>
+                    <td>{ticket.completed_date ? ticket.completed_date.toLocaleString() : 'Incomplete'}</td>
+                    <td>{ticket.sla_hours} hrs</td>
+                    <td>{ticket.deadline ? ticket.deadline.toLocaleString() : 'No Deadline'}</td>
+                    <td>
+                      {ticket.within_sla ? (
+                        <SLAStatusBadge status="within">Yes</SLAStatusBadge>
+                      ) : (
+                        <SLAStatusBadge status="expired">No</SLAStatusBadge>
+                      )}
+                    </td>
+                    <td>{ticket.related_incidents || 'No Related Incident'}</td>
+                    <td>{ticket.related_devices || 'No Device Name'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableContainer>
 
           <StyledPagination>
             <PageNavButton
@@ -508,19 +603,13 @@ const DaemonView = () => {
             >
               ←
             </PageNavButton>
-
-            {/* Always show page 1 */}
             <PageNumberButton
               $active={currentPage === 1}
               onClick={() => handlePageChange(1)}
             >
               1
             </PageNumberButton>
-
-            {/* Ellipsis after 1 */}
             {currentPage > 3 && <span>...</span>}
-
-            {/* Pages around current (e.g., 3, 4, 5 if current is 4) */}
             {Array.from({ length: 3 }, (_, i) => currentPage - 1 + i)
               .filter((page) => page > 1 && page < totalPages)
               .map((page) => (
@@ -532,11 +621,7 @@ const DaemonView = () => {
                   {page}
                 </PageNumberButton>
               ))}
-
-            {/* Ellipsis before last page */}
             {currentPage < totalPages - 2 && <span>...</span>}
-
-            {/* Always show last page */}
             {totalPages > 1 && (
               <PageNumberButton
                 $active={currentPage === totalPages}
@@ -554,7 +639,16 @@ const DaemonView = () => {
             </PageNavButton>
           </StyledPagination>
 
+
         </TableSection>
+        {showEditModal && selectedTicket && (
+          <EditTicketModal
+            ticket={selectedTicket}
+            onClose={() => setShowEditModal(false)}
+            onSave={handleUpdateTicket}
+          />
+
+        )}
       </Content>
     </Container>
   );
@@ -645,7 +739,9 @@ const Sidebar = styled.div<{ $isOpen: boolean }>`
   z-index: 10;
 `;
 
-const SidebarButton = styled.button`
+const SidebarButton = styled.button.attrs(() => ({
+  type: 'button'
+}))`
   background: #1e1b3a;
   border: none;
   color: #fff;
@@ -1005,6 +1101,8 @@ const PriorityBadge = styled.span<{ level: string }>`
 
   background-color: ${({ level }) => {
     switch (level.toLowerCase()) {
+      case 'critical':
+        return '#650213';
       case 'high':
         return '#ff4d4d';
       case 'medium':
@@ -1012,7 +1110,7 @@ const PriorityBadge = styled.span<{ level: string }>`
       case 'low':
         return '#27ae60';
       default:
-        return '#555'; // this already handles unknowns
+        return '#555';
     }
   }};
 `;
@@ -1048,7 +1146,7 @@ const PageNavButton = styled.button`
   }
 `;
 
-const PageNumberButton = styled(PageNavButton)<{ $active: boolean }>`
+const PageNumberButton = styled(PageNavButton) <{ $active: boolean }>`
   background-color: ${({ $active }) => ($active ? '#635bff' : '#1a1839')};
   box-shadow: ${({ $active }) =>
     $active ? '0 0 10px #635bff, 0 0 20px #635bff' : 'none'};
@@ -1069,4 +1167,39 @@ const FilterTagX = styled(FiX)`
   font-size: 17px;
   color: #ffffff;
   transition: color 0.3s ease, transform 0.3s ease;
+`;
+
+const SLAStatusBadge = styled.span<{ status: 'within' | 'expired' }>`
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  color: white;
+  background-color: ${({ status }) => status === 'within' ? '#27ae60' : '#ff4d4d'};
+`;
+
+const TableContainer = styled.div`
+  overflow-x: auto;
+  width: 100%;
+`;
+
+const RefreshButton = styled.button`
+  background-color: #1a1839;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover {
+    background-color: #635bff;
+    transform: scale(1.05);
+    animation: ${glow} 2s ease-in-out infinite;
+  }
 `;
