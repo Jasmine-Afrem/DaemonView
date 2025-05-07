@@ -245,7 +245,7 @@ const ChangeAvatarButton = styled.label`
   align-items: center;
   background-color: #635bff;
   color: #fff;
-  padding: 4px 10px;
+  padding: 6px 10px;
   border-radius: 30px;
   cursor: pointer;
   font-weight: bold;
@@ -257,7 +257,7 @@ const ChangeAvatarButton = styled.label`
   }
 
   svg {
-    margin-right: 5px;
+    margin-right: 1px;
   }
 `;
 

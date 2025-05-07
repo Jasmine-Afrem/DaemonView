@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '4.tcp.eu.ngrok.io',
+  host: '5.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 14402,
+  port: 17865,
 }).promise();
 
 // GET /api/check-auth
@@ -52,7 +52,7 @@ router.get('/get-tickets', async (req, res) => {
   }
 });
 
-// PUT /api/update-ticket-status
+// PUT /api/update-ticket
 router.put('/update-ticket', async (req, res) => {
   const { ticket_id, status, assigned_to_name } = req.body;
 
@@ -82,6 +82,12 @@ router.put('/update-ticket', async (req, res) => {
     if (status) {
       updateFields.push('status = ?');
       updateValues.push(status);
+
+      if (status === 'Resolved') {
+        updateFields.push('resolved_at = NOW()');
+      } else if (status === 'Closed') {
+        updateFields.push('closed_at = NOW()');
+      }
     }
 
     if (assignedToId !== null) {
@@ -89,10 +95,9 @@ router.put('/update-ticket', async (req, res) => {
       updateValues.push(assignedToId);
     }
 
-    // Always update updated_at
     updateFields.push('updated_at = NOW()');
 
-    updateValues.push(ticket_id); // For WHERE clause
+    updateValues.push(ticket_id);
 
     const updateQuery = `
       UPDATE tickets_raw
@@ -105,6 +110,134 @@ router.put('/update-ticket', async (req, res) => {
   } catch (err) {
     console.error('Error updating ticket:', err);
     res.status(500).json({ message: 'Server error while updating ticket' });
+  }
+});
+
+// GET /api/sla-compliance
+router.get('/sla-compliance', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_sla_compliance_filtered(?, ?, ?)',
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[1]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error fetching SLA compliance KPI' });
+  }
+});
+
+// GET /api/tickets-resolved
+router.get('/tickets-resolved', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_resolution_status_filtered(?, ?, ?)',
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[1]);
+  } catch (err) {
+    console.error('Error fetching resolved tickets:', err);
+    res.status(500).json({ message: 'Failed to fetch resolved tickets' });
+  }
+});
+
+// GET /api/tickets-by-status
+router.get('/tickets-by-status', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      `CALL get_status_summary_filtered(?, ?, ?)`,
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[1]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
+  }
+});
+
+// GET /api/resolution-time
+router.get('/resolution-time', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      `CALL get_average_resolution_time(?, ?, ?)`,
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
+  }
+});
+
+// GET /api/sla-compliance-teams
+router.get('/sla-compliance-teams', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_sla_compliance_filtered_by_team(?, ?, ?)',
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[1]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error fetching SLA compliance KPI' });
+  }
+});
+
+// GET /api/tickets-resolved-teams
+router.get('/tickets-resolved-teams', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_resolution_status_filtered_by_team(?, ?, ?)',
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[1]);
+  } catch (err) {
+    console.error('Error fetching resolved tickets:', err);
+    res.status(500).json({ message: 'Failed to fetch resolved tickets' });
+  }
+});
+
+// GET /api/tickets-by-status-teams
+router.get('/tickets-by-status-teams', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      `CALL get_status_summary_filtered_by_team(?, ?, ?)`,
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[1]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
+  }
+});
+
+// GET /api/resolution-time-teams
+router.get('/resolution-time-teams', async (req, res) => {
+  const { start_date, end_date, assigned_to } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      `CALL get_average_resolution_time_by_team(?, ?, ?)`,
+      [start_date || null, end_date || null, assigned_to || null]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
   }
 });
 

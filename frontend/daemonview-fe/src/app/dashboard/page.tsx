@@ -47,7 +47,6 @@ export type Ticket = {
   related_devices?: string;
 };
 
-
 // sidebar items array
 
 const DaemonView = () => {
@@ -65,13 +64,11 @@ const DaemonView = () => {
   const [isClosingPopup, setIsClosingPopup] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState<Map<string, string>>(new Map());
 
-
   const statusOptions = ['In_Progress', 'Closed', 'Resolved', 'Open'];
   const priorityOptions = ['Low', 'Medium', 'High', 'Critical'];
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-
 
   const sidebarIcons = [
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
@@ -83,8 +80,6 @@ const DaemonView = () => {
     { icon: <FiSettings />, label: 'Settings' },
     { icon: <FiHelpCircle />, label: 'Help' },
   ];
-
-
 
   useEffect(() => {
     setFilterValue('');
@@ -132,12 +127,10 @@ const DaemonView = () => {
     setShowEditModal(false);
   };
 
-
   const handleApplyFilter = async () => {
     if (selectedColumn && (filterValue || filterDate)) {
       const newKey = `${selectedColumn}: ${filterValue || filterDate}`;
 
-      // Create a new filters map locally and update state later
       const updatedFilters = new Map(appliedFilters);
       for (let [key, column] of updatedFilters.entries()) {
         if (column === selectedColumn) {
@@ -170,10 +163,13 @@ const DaemonView = () => {
         const data = await res.json();
 
         if (res.ok) {
-          const ticketsWithDates = data.tickets.map((t: { created_at: string | number | Date; updated_at: string | number | Date; }) => ({
+          const ticketsWithDates = data.tickets.map((t: any) => ({
             ...t,
-            created_at: t.created_at ? new Date(t.created_at) : 'N/A',
-            updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',
+            created_at: t.created_at ? new Date(t.created_at) : null,
+            updated_at: t.updated_at ? new Date(t.updated_at) : null,
+            close_date: t.close_date ? new Date(t.close_date) : null,
+            completed_date: t.completed_date ? new Date(t.completed_date) : null,
+            deadline: t.deadline ? new Date(t.deadline) : null,
           }));
 
           setTickets(ticketsWithDates);
@@ -187,7 +183,6 @@ const DaemonView = () => {
         } else {
           console.error('Failed to fetch tickets:', err);
         }
-
       }
     }
   };
@@ -199,7 +194,6 @@ const DaemonView = () => {
 
     const queryParams = new URLSearchParams();
 
-    // Only add filters if there are any left
     if (updatedFilters.size > 0) {
       updatedFilters.forEach((column, key) => {
         const [filterColumn, value] = key.split(': ');
@@ -209,7 +203,6 @@ const DaemonView = () => {
       });
     }
 
-    // Always include pagination params
     queryParams.append('page', currentPage.toString());
     queryParams.append('limit', pageSize.toString());
 
@@ -226,8 +219,11 @@ const DaemonView = () => {
       if (res.ok) {
         const ticketsWithDates = data.tickets.map((t: any) => ({
           ...t,
-          created_at: t.created_at ? new Date(t.created_at) : 'N/A',
-          updated_at: t.updated_at ? new Date(t.updated_at) : 'N/A',
+          created_at: t.created_at ? new Date(t.created_at) : null,
+          updated_at: t.updated_at ? new Date(t.updated_at) : null,
+          close_date: t.close_date ? new Date(t.close_date) : null,
+          completed_date: t.completed_date ? new Date(t.completed_date) : null,
+          deadline: t.deadline ? new Date(t.deadline) : null,
         }));
 
         setTickets(ticketsWithDates);
@@ -300,8 +296,6 @@ const DaemonView = () => {
     }
   };
 
-
-
   const tableHeaders = [
     'Info',
     'Ticket ID',
@@ -313,7 +307,7 @@ const DaemonView = () => {
     'Submitted By',
     'Assigned To',
     'Close Date',
-    'Completed Date',
+    'Resolve Date',
     'SLA (Hours)',
     'Deadline',
     'Within SLA',
@@ -346,10 +340,11 @@ const DaemonView = () => {
   };
 
   const handleInfoClick = (ticket: Ticket) => {
-    setSelectedTicket(ticket);
-    setShowEditModal(true);
+    if (ticket.status !== 'closed') {
+      setSelectedTicket(ticket);
+      setShowEditModal(true);
+    }
   };
-
 
   {
     useEffect(() => {
@@ -378,7 +373,6 @@ const DaemonView = () => {
     })
   }
 
-
   return (
     <Container>
       {/* sidebar is conditionally rendered based on sidebarOpen state */}
@@ -388,10 +382,7 @@ const DaemonView = () => {
             {icon}
           </SidebarButton>
         ))}
-
-
       </Sidebar>
-
 
       {/* main content area */}
       <Content $isSidebarOpen={sidebarOpen}>
@@ -412,9 +403,7 @@ const DaemonView = () => {
             <ProfileIcon onClick={handleProfileClick} /> {username}
             <LogoutIcon onClick={handleLogout} />
           </UserArea>
-
         </Header>
-
 
         {/* table section */}
         <TableSection>
@@ -529,7 +518,6 @@ const DaemonView = () => {
                     </label>
                   )}
 
-
                   <button
                     disabled={!selectedColumn || (!filterValue && !filterDate)}
                     onClick={(e) => {
@@ -544,7 +532,6 @@ const DaemonView = () => {
             </FilterWrapper>
           </TableHeader>
 
-
           <TableContainer>
             <Table>
               <thead>
@@ -558,9 +545,12 @@ const DaemonView = () => {
                 {tickets.map((ticket, idx) => (
                   <tr key={`ticket-${idx}`}>
                     <td>
-                      <FiEdit style={{ cursor: 'pointer' }} onClick={() => handleInfoClick(ticket)} />
+                      {ticket.status !== 'closed' ? (
+                        <FiEdit style={{ cursor: 'pointer' }} onClick={() => handleInfoClick(ticket)} />
+                      ) : (
+                        <FiEdit style={{ opacity: 0.3, cursor: 'not-allowed' }} />
+                      )}
                     </td>
-
                     <td>{ticket.ticket_id || 'No ID'}</td>
                     <td>{ticket.description || 'No Description'}</td>
                     <td>{ticket.status || 'No Status'}</td>
@@ -639,7 +629,6 @@ const DaemonView = () => {
             </PageNavButton>
           </StyledPagination>
 
-
         </TableSection>
         {showEditModal && selectedTicket && (
           <EditTicketModal
@@ -691,8 +680,6 @@ const slideUpFadeOut = keyframes`
     transform: translateY(-10px);
   }
 `;
-
-
 
 // styled components
 
