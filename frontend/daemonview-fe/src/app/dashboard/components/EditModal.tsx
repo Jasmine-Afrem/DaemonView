@@ -2,49 +2,81 @@ import React, { useState } from 'react';
 import styled from 'styled-components';
 import { FiX } from 'react-icons/fi';
 import { Ticket } from '../page';
-
+import { useEffect } from 'react';
 
 const statusOptions = ['Open', 'In_Progress', 'Resolved', 'Closed'];
 
 interface EditTicketModalProps {
-    ticket: Ticket;
-    onClose: () => void;
-    onSave: (updated: Partial<Ticket>) => void;
+  ticket: Ticket;
+  onClose: () => void;
+  onSave: (updated: Partial<Ticket>) => void;
 }
 
 const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSave }) => {
-    const [status, setStatus] = useState(ticket.status);
-    const [assignedTo, setAssignedTo] = useState(ticket.assigned_to || '');
+  if (!ticket || !ticket.ticket_id) return null;
+  const [status, setStatus] = useState(ticket.status);
+  const [assignedTo, setAssignedTo] = useState(ticket.assigned_to || '');
+  const [notes, setNotes] = useState('');
 
-    const handleSubmit = () => {
-        onSave({ ticket_id: ticket.ticket_id, status, assigned_to: assignedTo });
-        onClose();
+  useEffect(() => {
+    if (!ticket?.ticket_id) return;
+    const fetchNotes = async () => {
+      try {
+        const res = await fetch(`http://localhost:8080/api/get-notes/${ticket.ticket_id}`);
+        if (!res.ok) throw new Error('Failed to fetch notes');
+        const data = await res.json();
+        setNotes(data.notes || '');
+      } catch (err) {
+        console.error('Error fetching notes:', err);
+      }
     };
 
-    return (
-        <Overlay>
-            <Modal>
-                <Header>
-                    <h3>Edit Ticket</h3>
-                    <FiX onClick={onClose} style={{ cursor: 'pointer' }} />
-                </Header>
-                <Label>
-                    Status:
-                    <StyledSelect value={status} onChange={(e) => setStatus(e.target.value)}>
-                        {statusOptions.map((s, idx) => (
-                            <option key={idx} value={s}>{s}</option>
-                        ))}
-                    </StyledSelect>
-                </Label>
+    fetchNotes();
+  }, [ticket?.ticket_id]);
 
-                <Label>
-                    Assigned To:
-                    <input type="text" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
-                </Label>
-                <SaveButton onClick={handleSubmit}>Save Changes</SaveButton>
-            </Modal>
-        </Overlay>
-    );
+  const handleSubmit = () => {
+    onSave({
+      ticket_id: ticket.ticket_id,
+      status,
+      assigned_to: assignedTo,
+      notes
+    });
+    onClose();
+  };
+
+  return (
+    <Overlay>
+      <Modal>
+        <Header>
+          <h3>Edit Ticket</h3>
+          <FiX onClick={onClose} style={{ cursor: 'pointer' }} />
+        </Header>
+        <Label>
+          Status:
+          <StyledSelect value={status} onChange={(e) => setStatus(e.target.value)}>
+            {statusOptions.map((s, idx) => (
+              <option key={idx} value={s}>{s}</option>
+            ))}
+          </StyledSelect>
+        </Label>
+
+        <Label>
+          Assigned To:
+          <input type="text" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} />
+        </Label>
+        <Label>
+          Notes:
+          <Textarea
+            rows={4}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </Label>
+
+        <SaveButton onClick={handleSubmit}>Save Changes</SaveButton>
+      </Modal>
+    </Overlay>
+  );
 };
 
 export default EditTicketModal;
@@ -133,4 +165,17 @@ const StyledSelect = styled.select`
   background-size: 12px 8px;
   padding-right: 32px;
   cursor: pointer;
+`;
+
+const Textarea = styled.textarea`
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #2a274f;
+  color: white;
+  margin-top: 4px;
+  resize: vertical;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
 `;

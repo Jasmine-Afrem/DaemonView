@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '5.tcp.eu.ngrok.io',
+  host: '6.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 17865,
+  port: 18049,
 }).promise();
 
 // GET /api/check-auth
@@ -52,11 +52,32 @@ router.get('/get-tickets', async (req, res) => {
   }
 });
 
+// GET /api/get-notes
+router.get('/get-notes/:id', async(req, res) => {
+  const ticketId = req.params.id;
+
+  try {
+    const [rows] = await db.execute(
+      'SELECT notes FROM tickets_raw WHERE ticket_id = ?',
+      [ticketId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Ticket not found' });
+    }
+
+    res.json({ ticket_id: ticketId, notes: rows[0].notes });
+  } catch (err) {
+    console.error('Error fetching ticket description:', err);
+    res.status(500).json({ message: 'Failed to fetch description' });
+  }
+});
+
 // PUT /api/update-ticket
 router.put('/update-ticket', async (req, res) => {
-  const { ticket_id, status, assigned_to_name } = req.body;
+  const { ticket_id, status, assigned_to_name, notes } = req.body;
 
-  if (!ticket_id || (!status && !assigned_to_name)) {
+  if (!ticket_id || (!status && !assigned_to_name && notes === undefined)) {
     return res.status(400).json({ message: 'Missing data to update' });
   }
 
@@ -95,9 +116,14 @@ router.put('/update-ticket', async (req, res) => {
       updateValues.push(assignedToId);
     }
 
+    if (notes !== undefined) {
+      updateFields.push('notes = ?');
+      updateValues.push(notes);
+    }
+
     updateFields.push('updated_at = NOW()');
 
-    updateValues.push(ticket_id);
+    updateValues.push(ticket_id); // For WHERE clause
 
     const updateQuery = `
       UPDATE tickets_raw
@@ -107,11 +133,31 @@ router.put('/update-ticket', async (req, res) => {
 
     await db.query(updateQuery, updateValues);
 
+    const [updatedTicketRows] = await db.query(
+      `
+      SELECT 
+        t.*, 
+        u.username AS assigned_to_name 
+      FROM tickets_raw t 
+      LEFT JOIN users u ON t.assigned_to = u.id 
+      WHERE t.ticket_id = ?
+      `,
+      [ticket_id]
+    );
+
+    if (updatedTicketRows.length === 0) {
+      return res.status(404).json({ message: 'Ticket not found after update' });
+    }
+
+    const updatedTicket = updatedTicketRows[0];
+
+    res.json({ message: 'Ticket updated', ticket: updatedTicket });
   } catch (err) {
     console.error('Error updating ticket:', err);
     res.status(500).json({ message: 'Server error while updating ticket' });
   }
 });
+
 
 // GET /api/sla-compliance
 router.get('/sla-compliance', async (req, res) => {

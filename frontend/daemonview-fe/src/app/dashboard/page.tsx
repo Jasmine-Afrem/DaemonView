@@ -45,6 +45,7 @@ export type Ticket = {
   within_sla: boolean;
   related_incidents?: string;
   related_devices?: string;
+  notes?: string;
 };
 
 // sidebar items array
@@ -69,6 +70,7 @@ const DaemonView = () => {
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [successPopupVisible, setSuccessPopupVisible] = useState(false);
 
   const sidebarIcons = [
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
@@ -86,7 +88,7 @@ const DaemonView = () => {
     setFilterDate('');
   }, [selectedColumn]);
 
-  const handleUpdateTicket = async (updatedTicket: Partial<Ticket>) => {
+  const handleUpdateTicket = async (updatedTicket: Partial<Ticket> & { notes?: string }) => {
     try {
       const res = await fetch('http://localhost:8080/api/update-ticket', {
         method: 'PUT',
@@ -97,35 +99,31 @@ const DaemonView = () => {
           ticket_id: updatedTicket.ticket_id,
           status: updatedTicket.status,
           assigned_to_name: updatedTicket.assigned_to,
+          notes: updatedTicket.notes,
         }),
       });
-
+  
       const data = await res.json();
-
+  
       if (!res.ok) {
         console.error('Update failed:', data.message);
         return;
       }
-      setTickets((prev) =>
-        prev.map((t) =>
-          t.ticket_id === data.ticket.ticket_id
-            ? {
-              ...t,
-              status: data.ticket.status,
-              assigned_to: data.ticket.assigned_to_name,
-              updated_at: new Date(data.ticket.updated_at),
-            }
-            : t
-        )
-      );
-
-      console.log('Ticket updated successfully');
+  
+      await handleApplyFilter();
+  
+      setSuccessPopupVisible(true);
+      setTimeout(() => {
+        setSuccessPopupVisible(false);
+      }, 3000);
+  
+      setShowEditModal(false);
     } catch (err) {
       console.error('Update error:', err);
     }
-
-    setShowEditModal(false);
   };
+  
+
 
   const handleApplyFilter = async () => {
     if (selectedColumn && (filterValue || filterDate)) {
@@ -630,6 +628,12 @@ const DaemonView = () => {
           </StyledPagination>
 
         </TableSection>
+        {successPopupVisible && (
+  <PopupContainer>
+    <PopupMessage>Ticket updated successfully!</PopupMessage>
+  </PopupContainer>
+)}
+
         {showEditModal && selectedTicket && (
           <EditTicketModal
             ticket={selectedTicket}
@@ -893,6 +897,13 @@ const Table = styled.table`
     padding: 12px;
     text-align: center;
     border-bottom: 1px solid #2a274f;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background-color: #1a1839;
+    z-index: 5;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   }
 
   tbody tr:hover {
@@ -1166,8 +1177,32 @@ const SLAStatusBadge = styled.span<{ status: 'within' | 'expired' }>`
 `;
 
 const TableContainer = styled.div`
-  overflow-x: auto;
+  flex: 1;
+  min-height: 500px;
+  max-height: calc(100vh - 250px); 
+  overflow: auto;
   width: 100%;
+  border-radius: 10px;
+  border: 1px solid #2a274f;
+
+  scrollbar-width: thin;
+  scrollbar-color: #635bff #1a1839;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #1a1839;
+    border-radius: 10px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: #635bff;
+    border-radius: 10px;
+    border: 2px solid #1a1839;
+  }
 `;
 
 const RefreshButton = styled.button`
@@ -1189,4 +1224,33 @@ const RefreshButton = styled.button`
     transform: scale(1.05);
     animation: ${glow} 2s ease-in-out infinite;
   }
+`;
+const PopupContainer = styled.div`
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1c1b3a;
+  padding: 20px 30px;
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(99, 91, 255, 0.4);
+  z-index: 9999;
+  animation: fadeIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translateX(-50%) translateY(0); }
+    to { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  }
+`;
+
+const PopupMessage = styled.div`
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
 `;

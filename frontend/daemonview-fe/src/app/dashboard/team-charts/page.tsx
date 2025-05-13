@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes } from 'styled-components'; 
 import { useRouter } from 'next/navigation';
 import {
-  FiUserCheck, FiBarChart2, FiHome, FiAlertCircle,
-  FiClock, FiServer, FiSettings, FiHelpCircle, FiMenu, FiX, FiRefreshCcw
+  FiBarChart2,
+  FiAlertCircle,
+  FiClock, FiServer, FiSettings, FiHelpCircle, FiMenu, FiX, FiRefreshCcw,
+  FiFilter 
 } from 'react-icons/fi';
 import { Chart, Bar, Line } from 'react-chartjs-2';
 import {
@@ -27,7 +29,7 @@ ChartJS.register(
 );
 ChartJS.register({
   id: 'customLabels',
-  beforeDraw(chart, args, options) {
+  beforeDraw(chart, args, options: any) { 
     const {
       ctx,
       chartArea: { top },
@@ -55,23 +57,105 @@ ChartJS.register({
   },
 });
 
+interface ActiveFilterDisplay {
+  key: 'startDate' | 'endDate';
+  label: string;
+  value: string;
+}
+
+interface StatusEntry {
+  team_name: string;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  ticket_count: number;
+  percentage: string;
+}
+
 const TeamCharts = () => {
   const router = useRouter();
-  const [teamStats, setTeamStats] = useState([]);
+  const [teamStats, setTeamStats] = useState<any[]>([]); 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [username, setUsername] = useState('');
-  const [resolvedStats, setResolvedStats] = useState([]);
+  const [resolvedStats, setResolvedStats] = useState<any[]>([]); 
   const [statusStats, setStatusStats] = useState<StatusEntry[]>([]);
-  const [resolutionStats, setResolutionStats] = useState([]);
+  const [resolutionStats, setResolutionStats] = useState<any[]>([]); 
+  const [loading, setLoading] = useState(true); 
+
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [isClosingPopup, setIsClosingPopup] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [activeFiltersForDisplay, setActiveFiltersForDisplay] = useState<ActiveFilterDisplay[]>([]);
+
+  const buildChartApiQueryString = (): string => {
+    const params = new URLSearchParams();
+    if (filterStartDate) params.append('start_date', filterStartDate);
+    if (filterEndDate) params.append('end_date', filterEndDate);
+    return params.toString();
+  };
+
+  const closePopup = () => {
+    setIsClosingPopup(true);
+    setTimeout(() => {
+      setShowFilterPopup(false);
+      setIsClosingPopup(false);
+    }, 300);
+  };
+
+  const toggleFilterPopup = () => {
+    if (showFilterPopup) {
+      closePopup();
+    } else {
+      setShowFilterPopup(true);
+      setIsClosingPopup(false);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    const activeFilters: ActiveFilterDisplay[] = [];
+    if (filterStartDate) {
+      activeFilters.push({ key: 'startDate', label: 'Start Date', value: filterStartDate });
+    }
+    if (filterEndDate) {
+      activeFilters.push({ key: 'endDate', label: 'End Date', value: filterEndDate });
+    }
+    setActiveFiltersForDisplay(activeFilters);
+    refreshAllTeamChartData();
+    closePopup();
+  };
+
+  const handleRemoveFilter = (filterToRemoveKey: ActiveFilterDisplay['key']) => {
+    let newStartDate = filterStartDate;
+    let newEndDate = filterEndDate;
+
+    if (filterToRemoveKey === 'startDate') newStartDate = '';
+    if (filterToRemoveKey === 'endDate') newEndDate = '';
+
+    setFilterStartDate(newStartDate);
+    setFilterEndDate(newEndDate);
+
+    const activeFilters: ActiveFilterDisplay[] = [];
+    if (newStartDate) activeFilters.push({ key: 'startDate', label: 'Start Date', value: newStartDate });
+    if (newEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: newEndDate });
+    setActiveFiltersForDisplay(activeFilters);
+
+    refreshAllTeamChartData();
+  };
+
+  const handleClearAllFilters = () => {
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setActiveFiltersForDisplay([]);
+    refreshAllTeamChartData();
+    closePopup();
+  };
+
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const res = await fetch('http://localhost:8080/api/check-auth', {
-          method: 'GET',
-          credentials: 'include'
+          method: 'GET', credentials: 'include'
         });
-
         if (res.ok) {
           const data = await res.json();
           setUsername(data.user.username);
@@ -83,82 +167,77 @@ const TeamCharts = () => {
         router.push('/login');
       }
     };
-
     fetchUser();
-  }, []);
+  }, [router]);
 
   const fetchSLAData = async () => {
+    const queryString = buildChartApiQueryString();
     try {
-      const res = await fetch(`http://localhost:8080/api/sla-compliance-teams`, {
-        method: 'GET',
-        credentials: 'include'
+      const res = await fetch(`http://localhost:8080/api/sla-compliance-teams${queryString ? `?${queryString}` : ''}`, {
+        method: 'GET', credentials: 'include'
       });
-
       if (res.ok) {
         const data = await res.json();
         setTeamStats(data);
       } else {
-        console.error('Failed to fetch SLA data');
+        console.error('Failed to fetch SLA data:', await res.text());
+        setTeamStats([]);
       }
     } catch (error) {
       console.error('Error fetching SLA data', error);
+      setTeamStats([]);
     }
   };
 
-  useEffect(() => {
-    fetchSLAData();
-  }, []);
-
-
   const fetchResolvedData = async () => {
+    const queryString = buildChartApiQueryString();
     try {
-      const res = await fetch(`http://localhost:8080/api/tickets-resolved-teams`, {
-        method: 'GET',
-        credentials: 'include'
+      const res = await fetch(`http://localhost:8080/api/tickets-resolved-teams${queryString ? `?${queryString}` : ''}`, {
+        method: 'GET', credentials: 'include'
       });
-
       if (res.ok) {
         const data = await res.json();
         setResolvedStats(data);
       } else {
-        console.error('Failed to fetch resolved tickets data');
+        console.error('Failed to fetch resolved tickets data:', await res.text());
+        setResolvedStats([]);
       }
     } catch (error) {
       console.error('Error fetching resolved tickets', error);
+      setResolvedStats([]);
     }
   };
 
-  useEffect(() => {
-    fetchResolvedData();
-  }, []);
-
   const fetchStatusVolume = async () => {
+    const queryString = buildChartApiQueryString();
     try {
-      const res = await fetch(`http://localhost:8080/api/tickets-by-status-teams`, {
-        method: 'GET',
-        credentials: 'include'
+      const res = await fetch(`http://localhost:8080/api/tickets-by-status-teams${queryString ? `?${queryString}` : ''}`, {
+        method: 'GET', credentials: 'include'
       });
-
       if (res.ok) {
         const data = await res.json();
         setStatusStats(data);
       } else {
-        console.error('Failed to fetch status volume data');
+        console.error('Failed to fetch status volume data:', await res.text());
+        setStatusStats([]);
       }
     } catch (error) {
       console.error('Error fetching status volume data', error);
+      setStatusStats([]);
     }
   };
 
-  useEffect(() => {
-    fetchStatusVolume();
-  }, []);
+  const convertHHMMSStoMinutes = (str: string | null | undefined): number => {
+    if (!str) return 0;
+    const [hours, minutes, seconds] = str.split(':').map(Number);
+    return hours * 60 + minutes + seconds / 60;
+  };
 
   const fetchResolutionTimes = async () => {
+    const queryString = buildChartApiQueryString();
     try {
-      const res = await fetch('http://localhost:8080/api/resolution-time-teams', {
-        method: 'GET',
-        credentials: 'include',
+      const res = await fetch(`http://localhost:8080/api/resolution-time-teams${queryString ? `?${queryString}` : ''}`, {
+        method: 'GET', credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
@@ -168,45 +247,38 @@ const TeamCharts = () => {
         }));
         setResolutionStats(converted);
       } else {
-        console.error('Failed to fetch resolution times');
+        console.error('Failed to fetch resolution times:', await res.text());
+        setResolutionStats([]);
       }
     } catch (error) {
       console.error('Error fetching resolution times:', error);
+      setResolutionStats([]);
     }
+  };
+
+  const refreshAllTeamChartData = async () => {
+    setLoading(true);
+    await Promise.all([
+      fetchSLAData(),
+      fetchResolvedData(),
+      fetchStatusVolume(),
+      fetchResolutionTimes(),
+    ]);
+    setLoading(false);
   };
 
   useEffect(() => {
-    fetchResolutionTimes();
-  }, []);
+    refreshAllTeamChartData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
-  const convertHHMMSStoMinutes = (str: string) => {
-    const [hours, minutes, seconds] = str.split(':').map(Number);
-    return hours * 60 + minutes + seconds / 60;
-  };
 
-  const handleProfileClick = () => {
-    router.push('/dashboard/profile');
-  };
-
+  const handleProfileClick = () => router.push('/dashboard/profile');
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:8080/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-
+      await fetch('http://localhost:8080/api/logout', { method: 'POST', credentials: 'include' });
       router.push('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
-
-  const getColorForStatus = (label: string) => {
-    if (label.includes('open')) return '#f39c12';
-    if (label.includes('in_progress')) return '#3498db';
-    if (label.includes('resolved')) return '#2ecc71';
-    if (label.includes('closed')) return '#9b59b6';
-    return '#7f8c8d';
+    } catch (error) { console.error('Logout failed:', error); }
   };
 
   const sidebarIcons = [
@@ -219,199 +291,41 @@ const TeamCharts = () => {
     { icon: <FiSettings />, label: 'Settings' },
     { icon: <FiHelpCircle />, label: 'Help' }
   ];
-
-  const combinedData = {
-    labels: teamStats.map((team: any) => team.team_name),
-    datasets: [
-      {
-        type: 'bar' as const,
-        label: 'Total Tickets',
-        data: teamStats.map((team: any) => Number(team.total_tickets)),
-        backgroundColor: '#635bff'
-      },
-      {
-        type: 'line' as const,
-        label: 'SLA Compliance (%)',
-        data: teamStats.map((team: any) => Number(team.sla_percent)),
-        borderColor: '#27ae60',
-        borderWidth: 2,
-        tension: 0.4,
-        fill: false,
-        yAxisID: 'y1',
-        pointBackgroundColor: '#27ae60',
-      }
-    ]
-  };
-
-  const combinedOptions: ChartOptions<'bar' | 'line'> = {
-    responsive: true,
-    interaction: {
-      mode: 'index' as const,
-      intersect: false
-    },
-    scales: {
-      y: {
-        type: 'linear' as const,
-        position: 'left',
-        stacked: false,
-        title: {
-          display: true,
-          text: 'Total Tickets',
-          color: '#fff'
-        },
-        ticks: {
-          color: '#fff'
-        }
-      },
-      y1: {
-        type: 'linear' as const,
-        position: 'right',
-        stacked: false,
-        title: {
-          display: true,
-          text: 'SLA (%)',
-          color: '#fff'
-        },
-        ticks: {
-          color: '#fff'
-        },
-        grid: {
-          drawOnChartArea: false
-        }
-      },
-      x: {
-        stacked: false,
-        ticks: {
-          color: '#fff'
-        }
-      }
-    },
-    plugins: {
-      legend: {
-        labels: {
-          color: '#fff'
-        }
-      }
-    }
-  };
-
-  const barData = {
-    labels: teamStats.map((m: any) => m.member),
-    datasets: [{
-      label: 'Tickets Resolved',
-      data: teamStats.map((m: any) => m.ticketsResolved),
-      backgroundColor: '#635bff'
-    }]
-  };
-
-  const lineData = {
-    labels: teamStats.map((m: any) => m.member),
-    datasets: [{
-      label: 'SLA Compliance (%)',
-      data: teamStats.map((m: any) => m.slaCompliance),
-      fill: false,
-      borderColor: '#27ae60',
-      tension: 0.3
-    }]
-  };
-
-  const resolutionTimeData = {
-    labels: teamStats.map((m: any) => m.member),
-    datasets: [{
-      label: 'Avg. Resolution Time (min)',
-      data: teamStats.map((m: any) => m.avgResolutionTime),
-      fill: false,
-      borderColor: '#f39c12',
-      tension: 0.3
-    }]
-  };
-
-  const reassignmentsData = {
-    labels: teamStats.map((m: any) => m.member),
-    datasets: [{
-      label: 'Reassignments',
-      data: teamStats.map((m: any) => m.reassignments),
-      backgroundColor: '#e74c3c'
-    }]
-  };
-
-  const statusTeams = Array.from(new Set(statusStats.map((s: any) => s.team_name)));
-  const statusLabels = Array.from(new Set(statusStats.map((s: any) => s.status)));
-
-  const teamIndexMap = Object.fromEntries(statusTeams.map((t, i) => [t, i]));
-  const datasetsStatus: any[] = statusLabels.map((status) => ({
-    label: status,
-    data: new Array(statusTeams.length).fill(0),
-    backgroundColor:
-      status === 'open' ? '#f39c12' :
-        status === 'in_progress' ? '#3498db' :
-          status === 'resolved' ? '#2ecc71' :
-            '#9b59b6'
-  }));
-
-  interface StatusEntry {
-    team_name: string;
-    status: 'open' | 'in_progress' | 'resolved' | 'closed';
-    ticket_count: number;
-    percentage: string;
-  }
-
-  statusStats.forEach((entry: any) => {
-    const teamIdx = teamIndexMap[entry.team_name];
-    const dataset = datasetsStatus.find(d => d.label === entry.status);
-    if (dataset) dataset.data[teamIdx] = entry.ticket_count;
-  });
-
+  const statusTeams = Array.from(new Set(statusStats.map((s: StatusEntry) => s.team_name)));
   const statusOrder = ['open', 'in_progress', 'resolved', 'closed'];
-  const teamNames = Array.from(new Set(statusStats.map((s: any) => s.team_name))).filter(Boolean);
+  const teamNamesForCustomLabel = Array.from(new Set(statusStats.map((s: StatusEntry) => s.team_name))).filter(Boolean);
 
-  const orderedLabels = teamNames.flatMap(team =>
+  const orderedLabelsForVolumeChart = teamNamesForCustomLabel.flatMap(team =>
     statusOrder.map(status => `${team} - ${status}`)
   );
 
-  const backgroundColors: Record<string, string> = {
+  const backgroundColorsForVolume: Record<string, string> = {
     open: '#f39c12',
     in_progress: '#3498db',
     resolved: '#2ecc71',
     closed: '#9b59b6',
   };
 
-  const orderedColors = orderedLabels.map((label) => {
-    const status = label.split(' - ')[1];
-    return backgroundColors[status] || '#ccc';
-  });
-
   const volumeDataset = {
-    labels: orderedLabels,
+    labels: orderedLabelsForVolumeChart,
     datasets: [
       {
         label: 'Ticket Count',
-        data: orderedLabels.map((label) => {
+        data: orderedLabelsForVolumeChart.map((label) => {
           const [team, status] = label.split(' - ');
           const match = statusStats.find(
-            (entry: any) => entry.team_name === team && entry.status === status
+            (entry: StatusEntry) => entry.team_name === team && entry.status === status
           );
           return match ? match.ticket_count : 0;
         }),
-        backgroundColor: orderedLabels.map((label) => {
-          const status = label.split(' - ')[1];
-          return backgroundColors[status] || '#ccc';
+        backgroundColor: orderedLabelsForVolumeChart.map((label) => {
+          const statusKey = label.split(' - ')[1];
+          return backgroundColorsForVolume[statusKey] || '#ccc';
         }),
       },
     ],
   };
 
-  const statusByTeamData = {
-    labels: statusTeams,
-    datasets: datasetsStatus
-  };
-
-  const handleRefresh = async () => {
-    await fetchSLAData();
-    await fetchResolvedData();
-    await fetchStatusVolume();
-    await fetchResolutionTimes();
-  };
 
   return (
     <Wrapper>
@@ -430,191 +344,270 @@ const TeamCharts = () => {
               {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
             </SidebarToggle>
           </LeftHeader>
-
           <TitleImage src="/images/daemonview.png" alt="DaemonView" />
-
           <UserArea>
             <ProfileIcon onClick={handleProfileClick} />
             {username}
             <LogoutIcon onClick={handleLogout} />
           </UserArea>
         </Header>
-        <RefreshButton onClick={handleRefresh}>
-          <FiRefreshCcw size={16} /> Refresh
-        </RefreshButton>
+        <ControlsBar>
+            <RefreshButton onClick={refreshAllTeamChartData} disabled={loading}>
+                <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
+            </RefreshButton>
 
+            <FilterControls>
+              {activeFiltersForDisplay.length > 0 && (
+                <AppliedFilters>
+                  {activeFiltersForDisplay.map((filter) => (
+                    <FilterTag key={filter.key}>
+                      {filter.label}: {filter.value}
+                      <FilterTagX onClick={() => handleRemoveFilter(filter.key)} />
+                    </FilterTag>
+                  ))}
+                </AppliedFilters>
+              )}
+
+              <FilterWrapper>
+                <TableActions onClick={toggleFilterPopup}>
+                  <FiFilter />
+                </TableActions>
+                {showFilterPopup && (
+                  <NewFilterPopup
+                    $isClosing={isClosingPopup}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h4>Filter Options</h4>
+                    <label className={filterStartDate ? 'active' : ''}>
+                      Start Date:
+                      <input
+                        type="date"
+                        value={filterStartDate}
+                        onChange={(e) => setFilterStartDate(e.target.value)}
+                        max={filterEndDate || new Date().toISOString().split('T')[0]}
+                      />
+                    </label>
+                    <label className={filterEndDate ? 'active' : ''}>
+                      End Date:
+                      <input
+                        type="date"
+                        value={filterEndDate}
+                        onChange={(e) => setFilterEndDate(e.target.value)}
+                        min={filterStartDate}
+                        max={new Date().toISOString().split('T')[0]}
+                      />
+                    </label>
+                    <FilterPopupActions>
+                        <ClearFilterButton onClick={handleClearAllFilters}>
+                            Clear All
+                        </ClearFilterButton>
+                        <ApplyFilterButton onClick={handleApplyFilters}>
+                            Apply
+                        </ApplyFilterButton>
+                    </FilterPopupActions>
+                  </NewFilterPopup>
+                )}
+              </FilterWrapper>
+            </FilterControls>
+        </ControlsBar>
 
         <ChartSection>
           <Card style={{ gridColumn: 'span 2' }}>
-            <CardTitle><FiBarChart2 /> Tickets Resolved</CardTitle>
-            <PieChartsWrapper>
-              {resolvedStats.map((team: any, idx: number) => (
-                <PieChartContainer key={`pie-${idx}`}>
-                  <TeamLabel>{team.team_name}</TeamLabel>
-                  <Chart
-                    type="pie"
-                    data={{
-                      labels: ['Resolved', 'Unresolved'],
-                      datasets: [{
-                        data: [Number(team.resolved_count), Number(team.unresolved_count)],
-                        backgroundColor: ['#27ae60', '#e74c3c']
-                      }]
-                    }}
-                    options={{
-                      plugins: {
-                        legend: {
-                          labels: { color: '#fff', font: { size: 12 } },
-                          position: 'bottom'
+            <CardTitle><FiBarChart2 /> Tickets Resolved by Team</CardTitle>
+            {loading && resolvedStats.length === 0 ? (
+                <NoDataMessage>Loading charts...</NoDataMessage>
+            ) : resolvedStats.length > 0 ? (
+                <PieChartsWrapper>
+                {resolvedStats.map((team: any, idx: number) => (
+                    <PieChartContainer key={`pie-${idx}`}>
+                    <TeamLabel>{team.team_name}</TeamLabel>
+                    <Chart
+                        type="pie"
+                        data={{
+                        labels: ['Resolved', 'Unresolved'],
+                        datasets: [{
+                            data: [Number(team.resolved_count), Number(team.unresolved_count)],
+                            backgroundColor: ['#27ae60', '#e74c3c'],
+                            hoverOffset: 4,
+                        }]
+                        }}
+                        options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                            labels: { color: '#fff', font: { size: 12 } },
+                            position: 'bottom'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += context.parsed;
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
                         }
-                      }
-                    }}
-                  />
-                </PieChartContainer>
-              ))}
-            </PieChartsWrapper>
+                        }}
+                    />
+                    </PieChartContainer>
+                ))}
+                </PieChartsWrapper>
+            ) : (
+                <NoDataMessage>No data for Tickets Resolved by Team.</NoDataMessage>
+            )}
           </Card>
 
           <Card style={{ gridColumn: 'span 2' }}>
             <CardTitle><FiBarChart2 /> SLA Compliance per Team</CardTitle>
-            <ChartWrapper>
-              <Bar
-                data={{
-                  labels: teamStats.map((team: any) => team.team_name),
-                  datasets: [
-                    {
-                      label: 'Within SLA',
-                      data: teamStats.map((team: any) => Number(team.within_sla)),
-                      backgroundColor: '#27ae60'
-                    },
-                    {
-                      label: 'Outside SLA',
-                      data: teamStats.map((team: any) =>
-                        Number(team.total_tickets) - Number(team.within_sla)
-                      ),
-                      backgroundColor: '#e74c3c'
-                    }
-                  ]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      stacked: true,
-                      beginAtZero: true,
-                      ticks: { color: '#fff' },
-                      title: {
-                        display: true,
-                        text: 'Number of Tickets',
-                        color: '#fff'
-                      }
-                    },
-                    x: {
-                      stacked: true,
-                      ticks: { color: '#fff' }
-                    }
-                  },
-                  plugins: {
-                    legend: {
-                      labels: {
-                        color: '#fff'
-                      }
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const label = context.dataset.label || '';
-                          const value = context.parsed.y;
-                          return `${label}: ${value} tickets`;
+            {loading && teamStats.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+            ) : teamStats.length > 0 ? (
+                <ChartWrapper>
+                <Bar
+                    data={{
+                    labels: teamStats.map((team: any) => team.team_name),
+                    datasets: [
+                        {
+                        label: 'Within SLA',
+                        data: teamStats.map((team: any) => Number(team.within_sla)),
+                        backgroundColor: '#27ae60'
+                        },
+                        {
+                        label: 'Outside SLA',
+                        data: teamStats.map((team: any) =>
+                            Number(team.total_tickets) - Number(team.within_sla)
+                        ),
+                        backgroundColor: '#e74c3c'
                         }
-                      }
+                    ]
+                    }}
+                    options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: { color: '#fff' },
+                        title: { display: true, text: 'Number of Tickets', color: '#fff' }
+                        },
+                        x: { stacked: true, ticks: { color: '#fff' } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#fff' } },
+                        tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            return `${label}: ${value} tickets`;
+                            }
+                        }
+                        }
                     }
-                  }
-                }}
-              />
-            </ChartWrapper>
+                    }}
+                />
+                </ChartWrapper>
+            ) : (
+                <NoDataMessage>No SLA data available for teams.</NoDataMessage>
+            )}
           </Card>
 
           <Card>
-            <CardTitle><FiClock /> Avg. Resolution Time (Minutes)</CardTitle>
-            <ChartWrapper>
-              <Bar
-                data={{
-                  labels: resolutionStats.map((r: any) => r.team),
-                  datasets: [{
-                    label: 'Resolution Time (min)',
-                    data: resolutionStats.map((r: any) => r.timeInMinutes),
-                    backgroundColor: '#f39c12'
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      ticks: { color: '#fff' },
-                      title: {
-                        display: true,
-                        text: 'Minutes',
-                        color: '#fff'
-                      }
+            <CardTitle><FiClock /> Avg. Resolution Time (Minutes) by Team</CardTitle>
+             {loading && resolutionStats.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+            ) : resolutionStats.length > 0 ? (
+                <ChartWrapper>
+                <Bar
+                    data={{
+                    labels: resolutionStats.map((r: any) => r.team),
+                    datasets: [{
+                        label: 'Resolution Time (min)',
+                        data: resolutionStats.map((r: any) => r.timeInMinutes),
+                        backgroundColor: '#f39c12'
+                    }]
+                    }}
+                    options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                        beginAtZero: true,
+                        ticks: { color: '#fff' },
+                        title: { display: true, text: 'Minutes', color: '#fff' }
+                        },
+                        x: { ticks: { color: '#fff' } }
                     },
-                    x: {
-                      ticks: { color: '#fff' }
-                    }
-                  },
-                  plugins: {
-                    legend: {
-                      labels: { color: '#fff' }
-                    }
-                  }
-                }}
-              />
-            </ChartWrapper>
+                    plugins: { legend: { labels: { color: '#fff' } } }
+                    }}
+                />
+                </ChartWrapper>
+            ) : (
+                <NoDataMessage>No resolution time data available for teams.</NoDataMessage>
+            )}
           </Card>
 
 
           <Card style={{ gridColumn: 'span 2' }}>
             <CardTitle><FiBarChart2 /> Volume by Status Per Team</CardTitle>
-            <ChartWrapper>
-              <Bar
-                data={volumeDataset}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      stacked: false,
-                      ticks: { color: '#fff' },
-                      title: {
-                        display: true,
-                        text: 'Ticket Count',
-                        color: '#fff',
-                      },
-                    },
-                    x: {
-                      ticks: {
-                        color: '#fff',
-                        callback: (val, index) => {
-                          const label = volumeDataset.labels[index];
-                          return label?.split(' - ')[1] || '';
+            {loading && statusStats.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+            ) : statusStats.length > 0 ? (
+                <ChartWrapper>
+                <Bar
+                    data={volumeDataset} 
+                    options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                        beginAtZero: true,
+                        stacked: false, 
+                        ticks: { color: '#fff' },
+                        title: { display: true, text: 'Ticket Count', color: '#fff' },
                         },
-                      },
+                        x: {
+                        ticks: {
+                            color: '#fff',
+                            callback: (val:any, index:number) => { 
+                            const label = volumeDataset.labels[index];
+                            return label?.split(' - ')[1] || ''; 
+                            },
+                        },
+                        },
                     },
-                  },
-                  plugins: {
-                    legend: { display: false },
-                    // @ts-ignore
-                    customLabels: {
-                      teamNames,
-                      statusCount: statusOrder.length,
+                    plugins: {
+                        legend: { display: false }, 
+                        tooltip: {
+                            callbacks: {
+                                title: (tooltipItems) => { 
+                                    return tooltipItems[0].label;
+                                },
+                                label: (context) => {
+                                    return `Count: ${context.parsed.y}`;
+                                }
+                            }
+                        },
+                        // @ts-ignore because customLabels is a custom option
+                        customLabels: {
+                        teamNames: teamNamesForCustomLabel,
+                        statusCount: statusOrder.length,
+                        },
                     },
-                  },
-                }}
-              />
-            </ChartWrapper>
+                    }}
+                />
+                </ChartWrapper>
+            ) : (
+                <NoDataMessage>No volume by status data available for teams.</NoDataMessage>
+            )}
           </Card>
         </ChartSection>
       </Content>
@@ -623,6 +616,7 @@ const TeamCharts = () => {
 };
 
 export default TeamCharts;
+
 const glow = keyframes`
   0% { box-shadow: 0 0 10px rgba(99, 91, 255, 0.4); }
   50% { box-shadow: 0 0 20px rgba(99, 91, 255, 0.7); }
@@ -778,6 +772,260 @@ const LogoutIcon = styled(FiLogOut)`
   }
 `;
 
+const ControlsBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px; 
+  padding: 0 10px; 
+`;
+
+const FilterControls = styled.div` 
+  display: flex;
+  align-items: center;
+  gap: 10px; 
+  justify-content: flex-end;
+  position: relative;
+`;
+
+const FilterWrapper = styled.div` 
+  position: relative; 
+  display: inline-block; 
+`;
+
+const TableActions = styled.button` 
+  background: #1a1839;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center; 
+  color: white; 
+  border: none; 
+  cursor: pointer;
+  transition: 0.3s ease;
+
+  &:hover {
+    background: #635bff;
+    animation: ${glow} 2s ease-in-out infinite;
+  }
+`;
+
+const slideDownFadeIn = keyframes` 
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+const slideUpFadeOut = keyframes` 
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+`;
+
+const NewFilterPopup = styled.div<{ $isClosing: boolean }>` 
+  position: absolute;
+  top: calc(100% + 10px); 
+  right: 0;
+  background-color: #1a1839;
+  border: 1px solid #635bff;
+  border-radius: 12px;
+  padding: 20px; 
+  z-index: 1000; 
+  box-shadow: 0 8px 25px rgba(0,0,0,0.3); 
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 250px;
+  animation: ${({ $isClosing }) => $isClosing ? slideUpFadeOut : slideDownFadeIn} 0.3s ease forwards;
+
+  h4 {
+    margin: 0 0 10px 0; 
+    color: #fff;
+    font-size: 18px; 
+    text-align: center;
+    border-bottom: 1px solid #2a274f;
+    padding-bottom: 10px;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    color: #fff; 
+    font-size: 14px;
+    font-weight: 500;
+    
+    &.active { color: #635bff; }
+    &.active select,
+    &.active input {
+      box-shadow: 0 0 8px rgba(99, 91, 255, 0.7);
+      border: 1px solid #635bff;
+    }
+  }
+
+  input, select {
+    margin-top: 6px; 
+    padding: 12px 15px; 
+    border-radius: 15px; 
+    border: 1px solid rgb(155, 153, 175); 
+    background-color: #0e0c28; 
+    color: #ccc;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+
+    &:focus {
+      outline: none;
+      border-color: #635bff;
+      box-shadow: 0 0 8px rgba(99, 91, 255, 0.5);
+    }
+  }
+  
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1.41.59L6 5.17l4.59-4.58L12 2l-6 6-6-6z' fill='%23cccccc'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    background-size: 12px 8px;
+    padding-right: 40px; 
+    cursor: pointer;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1); 
+    cursor: pointer;
+  }
+`;
+
+const FilterPopupActions = styled.div` 
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+`;
+
+const ApplyFilterButton = styled.button` 
+    flex: 1;
+    background-color: #27ae60;
+    border: none;
+    padding: 10px; 
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background-color: #229954;
+      transform: translateY(-1px);
+    }
+    &:disabled {
+      background-color: #2a274f;
+      color: #555;
+      cursor: not-allowed;
+    }
+`;
+
+const ClearFilterButton = styled.button` 
+    flex: 1;
+    background-color: #c0392b;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+
+    &:hover:not(:disabled) {
+      background-color: #a93226;
+      transform: translateY(-1px);
+    }
+`;
+
+const AppliedFilters = styled.div` 
+  display: flex;
+  flex-wrap: wrap; 
+  gap: 8px;
+  align-items: center;
+`;
+
+const FilterTag = styled.div` 
+  background-color: #635bff;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px; 
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px #635bff, 0 0 20px #635bff;
+  }
+`;
+
+const FilterTagX = styled(FiX)` 
+  font-size: 18px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: color 0.3s ease, transform 0.3s ease;
+  border-radius: 50%;
+  padding: 2px;
+  margin-bottom: 0.1rem;
+
+  &:hover {
+    color: #ff5b5b; 
+    transform: scale(1.2) rotate(90deg);
+    background-color: rgba(255,255,255,0.1);
+  }
+`;
+
+const RefreshButton = styled.button` 
+  background-color: #1a1839;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px; 
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &:hover:not(:disabled) { // Added :not(:disabled)
+    background-color: #4e46d4;
+    box-shadow: 0 0 8px rgba(99, 91, 255, 0.6),
+                0 0 15px rgba(99, 91, 255, 0.4),
+                0 0 25px rgba(99, 91, 255, 0.2);
+  }
+   &:disabled { // Style for disabled state
+    background-color: #2a274f;
+    color: #555;
+    cursor: not-allowed;
+  }
+`;
+
 const ChartSection = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -790,78 +1038,66 @@ const Card = styled.div`
   border-radius: 20px;
   padding: 20px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-  display: block;
+  display: flex; 
   flex-direction: column;
+  overflow: hidden; 
 `;
 
 const CardTitle = styled.h3`
-  font-size: 18px;
+  font-size: 18px; 
   margin-bottom: 20px;
   display: flex;
   align-items: center;
   gap: 10px;
-`;
-
-const PieWrapper = styled.div`
-  width: 250px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-const PieTitle = styled.h4`
-  color: #fff;
-  margin-bottom: 10px;
-  text-align: center;
+  color: #fff; 
 `;
 
 const PieChartsWrapper = styled.div`
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 40px;
+  justify-content: space-around; 
+  align-items: flex-start;
+  gap: 20px; 
+  width: 100%; 
+  flex: 1; 
 `;
 
 const PieChartContainer = styled.div`
-  width: 370px;
-  height: 370px;
+  width: clamp(280px, 30%, 370px); 
+  min-height: 300px; 
+  height: auto; 
   display: flex;
   flex-direction: column;
   align-items: center;
+  
+  canvas { 
+    max-width: 100%;
+    max-height: 300px; 
+  }
 `;
 
 const TeamLabel = styled.div`
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: 10px; 
+  font-size: 16px; 
   color: white;
   font-weight: bold;
   text-align: center;
 `;
+
 const ChartWrapper = styled.div`
-  height: 450px;
+  height: 400px; 
+  width: 100%;
   display: flex;
-  align-items: flex-end;
+  justify-content: center; 
+  flex: 1; 
 `;
 
-const RefreshButton = styled.button`
-  background-color: #1a1839;
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 7%;
-  margin-bottom: 1rem;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-
-  &:hover {
-    background-color: #4e46d4;
-    box-shadow: 0 0 6px rgba(99, 91, 255, 0.4);
-  }
+const NoDataMessage = styled.p`
+  text-align: center;
+  font-style: italic;
+  color: #aaa;
+  font-size: 16px;
+  margin: auto; 
+  padding: 20px;
 `;
