@@ -19,7 +19,7 @@
 ---
 
 <div align="center">
-  <h3><strong>Roles</strong></h3>
+  <h2><strong>Roles</strong></h3>
   <p style="line-height: 1.6;">
     <strong>Frontend:</strong><br/>
        Afrem Jasmine - <a href="https://github.com/Jasmine-Afrem" target="_blank">(Jasmine-Afrem)</a><br/>
