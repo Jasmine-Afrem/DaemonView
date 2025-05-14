@@ -10,9 +10,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-Frontend-000000?style=for-the-badge&logo=next.js&logoColor=white" />
-    
+    &nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Express.js-Backend-303030?style=for-the-badge&logo=express&logoColor=white" />
-    
+    &nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Status-In_Progress-FFB800?style=for-the-badge&logo=progress&logoColor=white" />
 </p>
 
