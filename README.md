@@ -63,7 +63,7 @@ This project is currently in development and aims to offer:
 - 🗂 **Ticket Management** – View, edit, and manage support/issue tickets.
 - 📈 **Dashboard Analytics** – View charts displaying ticket trends, priorities, SLA compliance, and more.
 - 🔎 **Filter System** – Filter tickets by priority, date range, and status.
-- 🔐 **Authentication** – Role-based access to secure sensitive data (coming soon).
+- 🔐 **Authentication** – Role-based access to secure sensitive data.
 - 🔄 **Responsive Design** – Works seamlessly across devices.
 
 ---
