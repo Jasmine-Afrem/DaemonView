@@ -1,5 +1,6 @@
-<img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/daemonview.png" alt="DaemonView Banner" width="800"/>
-
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/daemonview.png" alt="DaemonView Banner" width="800"/>
+</p>
 
 <p align="center">
   <em>An operational dashboard built in collaboration with <strong>Nokia</strong></em>
@@ -9,11 +10,27 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-Frontend-000000?style=for-the-badge&logo=next.js&logoColor=white" />
-  &nbsp;&nbsp;
+    
   <img src="https://img.shields.io/badge/Express.js-Backend-303030?style=for-the-badge&logo=express&logoColor=white" />
-  &nbsp;&nbsp;
+    
   <img src="https://img.shields.io/badge/Status-In_Progress-FFB800?style=for-the-badge&logo=progress&logoColor=white" />
 </p>
+
+---
+
+<div align="center">
+  <h3><strong>Roles</strong></h3>
+  <p style="line-height: 1.6;">
+    <strong>Frontend:</strong><br/>
+       Afrem Jasmine - <a href="https://github.com/Jasmine-Afrem" target="_blank">(Jasmine-Afrem)</a><br/>
+       Balas Bianca - <a href="https://github.com/biaqwe" target="_blank">(biaqwe)</a>
+  </p>
+  <p style="line-height: 1.6; margin-top: 0.5em;">
+    <strong>Backend + Database:</strong><br/>
+       Grad Andrei - <a href="https://github.com/AF1DC2" target="_blank">(AF1DC2)</a><br/>
+       Sandu Aida - <a href="https://github.com/Aida1506" target="_blank">(Aida1506)</a> 
+  </p>
+</div>
 
 ---
 
