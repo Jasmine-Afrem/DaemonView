@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import styled, { keyframes } from 'styled-components'; 
+import styled, { keyframes } from 'styled-components';
 import { useRouter } from 'next/navigation';
 import {
   FiBarChart2,
   FiAlertCircle,
   FiClock, FiServer, FiSettings, FiHelpCircle, FiMenu, FiX, FiRefreshCcw,
-  FiFilter 
+  FiFilter
 } from 'react-icons/fi';
 import { Chart, Bar, Line } from 'react-chartjs-2';
 import {
@@ -29,7 +29,7 @@ ChartJS.register(
 );
 ChartJS.register({
   id: 'customLabels',
-  beforeDraw(chart, args, options: any) { 
+  beforeDraw(chart, args, options: any) {
     const {
       ctx,
       chartArea: { top },
@@ -58,7 +58,7 @@ ChartJS.register({
 });
 
 interface ActiveFilterDisplay {
-  key: 'startDate' | 'endDate';
+  key: 'startDate' | 'endDate' | 'priority';
   label: string;
   value: string;
 }
@@ -72,26 +72,30 @@ interface StatusEntry {
 
 const TeamCharts = () => {
   const router = useRouter();
-  const [teamStats, setTeamStats] = useState<any[]>([]); 
+  const [teamStats, setTeamStats] = useState<any[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [username, setUsername] = useState('');
-  const [resolvedStats, setResolvedStats] = useState<any[]>([]); 
+  const [resolvedStats, setResolvedStats] = useState<any[]>([]);
   const [statusStats, setStatusStats] = useState<StatusEntry[]>([]);
-  const [resolutionStats, setResolutionStats] = useState<any[]>([]); 
-  const [loading, setLoading] = useState(true); 
+  const [resolutionStats, setResolutionStats] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [isClosingPopup, setIsClosingPopup] = useState(false);
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
   const [activeFiltersForDisplay, setActiveFiltersForDisplay] = useState<ActiveFilterDisplay[]>([]);
+  const [filtersApplied, setFiltersApplied] = useState(false); // Flag to trigger useEffect
 
   const buildChartApiQueryString = (): string => {
     const params = new URLSearchParams();
     if (filterStartDate) params.append('start_date', filterStartDate);
     if (filterEndDate) params.append('end_date', filterEndDate);
+    if (filterPriority) params.append('priority', filterPriority);
     return params.toString();
   };
+
 
   const closePopup = () => {
     setIsClosingPopup(true);
@@ -112,43 +116,63 @@ const TeamCharts = () => {
 
   const handleApplyFilters = () => {
     const activeFilters: ActiveFilterDisplay[] = [];
+
     if (filterStartDate) {
       activeFilters.push({ key: 'startDate', label: 'Start Date', value: filterStartDate });
     }
     if (filterEndDate) {
       activeFilters.push({ key: 'endDate', label: 'End Date', value: filterEndDate });
     }
+    if (filterPriority) {
+      activeFilters.push({ key: 'priority', label: 'Priority', value: filterPriority });
+    }
     setActiveFiltersForDisplay(activeFilters);
-    refreshAllTeamChartData();
+    setFiltersApplied(true); 
+    // refreshAllTeamChartData();
     closePopup();
   };
+
 
   const handleRemoveFilter = (filterToRemoveKey: ActiveFilterDisplay['key']) => {
     let newStartDate = filterStartDate;
     let newEndDate = filterEndDate;
-
+    let newPriority = filterPriority;
+  
     if (filterToRemoveKey === 'startDate') newStartDate = '';
     if (filterToRemoveKey === 'endDate') newEndDate = '';
-
+    if (filterToRemoveKey === 'priority') newPriority = '';
+  
     setFilterStartDate(newStartDate);
     setFilterEndDate(newEndDate);
-
-    const activeFilters: ActiveFilterDisplay[] = [];
-    if (newStartDate) activeFilters.push({ key: 'startDate', label: 'Start Date', value: newStartDate });
-    if (newEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: newEndDate });
-    setActiveFiltersForDisplay(activeFilters);
-
-    refreshAllTeamChartData();
+    setFilterPriority(newPriority);
+  
+    const updatedFiltersForDisplay: ActiveFilterDisplay[] = [];
+    if (newStartDate) updatedFiltersForDisplay.push({ key: 'startDate', label: 'Start Date', value: newStartDate });
+    if (newEndDate) updatedFiltersForDisplay.push({ key: 'endDate', label: 'End Date', value: newEndDate });
+    if (newPriority) updatedFiltersForDisplay.push({ key: 'priority', label: 'Priority', value: newPriority });
+    setActiveFiltersForDisplay(updatedFiltersForDisplay);
+    
+    setFiltersApplied(true);
+    // setTimeout(() => { refreshAllTeamChartData(); }, 0); 
   };
-
+    
   const handleClearAllFilters = () => {
     setFilterStartDate('');
     setFilterEndDate('');
+    setFilterPriority('');
     setActiveFiltersForDisplay([]);
-    refreshAllTeamChartData();
+    setFiltersApplied(true); 
     closePopup();
   };
 
+ 
+  useEffect(() => {
+    if (filtersApplied) {
+      refreshAllTeamChartData();
+      setFiltersApplied(false); 
+    }
+  }, [filterStartDate, filterEndDate, filterPriority, filtersApplied]);
+  
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -172,6 +196,7 @@ const TeamCharts = () => {
 
   const fetchSLAData = async () => {
     const queryString = buildChartApiQueryString();
+    setLoading(true); 
     try {
       const res = await fetch(`http://localhost:8080/api/sla-compliance-teams${queryString ? `?${queryString}` : ''}`, {
         method: 'GET', credentials: 'include'
@@ -187,10 +212,12 @@ const TeamCharts = () => {
       console.error('Error fetching SLA data', error);
       setTeamStats([]);
     }
+    // setLoading(false);
   };
 
   const fetchResolvedData = async () => {
     const queryString = buildChartApiQueryString();
+    // setLoading(true);
     try {
       const res = await fetch(`http://localhost:8080/api/tickets-resolved-teams${queryString ? `?${queryString}` : ''}`, {
         method: 'GET', credentials: 'include'
@@ -206,10 +233,12 @@ const TeamCharts = () => {
       console.error('Error fetching resolved tickets', error);
       setResolvedStats([]);
     }
+    // setLoading(false);
   };
 
   const fetchStatusVolume = async () => {
     const queryString = buildChartApiQueryString();
+    // setLoading(true);
     try {
       const res = await fetch(`http://localhost:8080/api/tickets-by-status-teams${queryString ? `?${queryString}` : ''}`, {
         method: 'GET', credentials: 'include'
@@ -225,6 +254,7 @@ const TeamCharts = () => {
       console.error('Error fetching status volume data', error);
       setStatusStats([]);
     }
+    // setLoading(false);
   };
 
   const convertHHMMSStoMinutes = (str: string | null | undefined): number => {
@@ -235,6 +265,7 @@ const TeamCharts = () => {
 
   const fetchResolutionTimes = async () => {
     const queryString = buildChartApiQueryString();
+    // setLoading(true);
     try {
       const res = await fetch(`http://localhost:8080/api/resolution-time-teams${queryString ? `?${queryString}` : ''}`, {
         method: 'GET', credentials: 'include',
@@ -254,9 +285,11 @@ const TeamCharts = () => {
       console.error('Error fetching resolution times:', error);
       setResolutionStats([]);
     }
+    // setLoading(false);
   };
 
   const refreshAllTeamChartData = async () => {
+    console.log("Refreshing data with filters:", { filterStartDate, filterEndDate, filterPriority }); // For debugging
     setLoading(true);
     await Promise.all([
       fetchSLAData(),
@@ -269,8 +302,8 @@ const TeamCharts = () => {
 
   useEffect(() => {
     refreshAllTeamChartData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   const handleProfileClick = () => router.push('/dashboard/profile');
@@ -352,206 +385,220 @@ const TeamCharts = () => {
           </UserArea>
         </Header>
         <ControlsBar>
-            <RefreshButton onClick={refreshAllTeamChartData} disabled={loading}>
-                <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
-            </RefreshButton>
+          <RefreshButton onClick={refreshAllTeamChartData} disabled={loading}>
+            <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
+          </RefreshButton>
 
-            <FilterControls>
-              {activeFiltersForDisplay.length > 0 && (
-                <AppliedFilters>
-                  {activeFiltersForDisplay.map((filter) => (
-                    <FilterTag key={filter.key}>
-                      {filter.label}: {filter.value}
-                      <FilterTagX onClick={() => handleRemoveFilter(filter.key)} />
-                    </FilterTag>
-                  ))}
-                </AppliedFilters>
+          <FilterControls>
+            {activeFiltersForDisplay.length > 0 && (
+              <AppliedFilters>
+                {activeFiltersForDisplay.map((filter) => (
+                  <FilterTag key={filter.key}>
+                    {filter.label}: {filter.value}
+                    <FilterTagX onClick={() => handleRemoveFilter(filter.key)} />
+                  </FilterTag>
+                ))}
+              </AppliedFilters>
+            )}
+
+            <FilterWrapper>
+              <TableActions onClick={toggleFilterPopup}>
+                <FiFilter />
+              </TableActions>
+              {showFilterPopup && (
+                <NewFilterPopup
+                  $isClosing={isClosingPopup}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h4>Filter Options</h4>
+                  <label className={filterStartDate ? 'active' : ''}>
+                    Start Date:
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      max={filterEndDate || new Date().toISOString().split('T')[0]}
+                    />
+                  </label>
+                  <label className={filterEndDate ? 'active' : ''}>
+                    End Date:
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      min={filterStartDate}
+                      max={new Date().toISOString().split('T')[0]}
+                    />
+                  </label>
+                  <label className={filterPriority ? 'active' : ''}>
+                    Priority:
+                    <select
+                      value={filterPriority}
+                      onChange={(e) => setFilterPriority(e.target.value)}
+                    >
+                      <option value="">Select priority</option>
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                      <option value="Critical">Critical</option>
+                    </select>
+                  </label>
+
+                  <FilterPopupActions>
+                    <ClearFilterButton onClick={handleClearAllFilters}>
+                      Clear All
+                    </ClearFilterButton>
+                    <ApplyFilterButton onClick={handleApplyFilters}>
+                      Apply
+                    </ApplyFilterButton>
+                  </FilterPopupActions>
+                </NewFilterPopup>
               )}
-
-              <FilterWrapper>
-                <TableActions onClick={toggleFilterPopup}>
-                  <FiFilter />
-                </TableActions>
-                {showFilterPopup && (
-                  <NewFilterPopup
-                    $isClosing={isClosingPopup}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <h4>Filter Options</h4>
-                    <label className={filterStartDate ? 'active' : ''}>
-                      Start Date:
-                      <input
-                        type="date"
-                        value={filterStartDate}
-                        onChange={(e) => setFilterStartDate(e.target.value)}
-                        max={filterEndDate || new Date().toISOString().split('T')[0]}
-                      />
-                    </label>
-                    <label className={filterEndDate ? 'active' : ''}>
-                      End Date:
-                      <input
-                        type="date"
-                        value={filterEndDate}
-                        onChange={(e) => setFilterEndDate(e.target.value)}
-                        min={filterStartDate}
-                        max={new Date().toISOString().split('T')[0]}
-                      />
-                    </label>
-                    <FilterPopupActions>
-                        <ClearFilterButton onClick={handleClearAllFilters}>
-                            Clear All
-                        </ClearFilterButton>
-                        <ApplyFilterButton onClick={handleApplyFilters}>
-                            Apply
-                        </ApplyFilterButton>
-                    </FilterPopupActions>
-                  </NewFilterPopup>
-                )}
-              </FilterWrapper>
-            </FilterControls>
+            </FilterWrapper>
+          </FilterControls>
         </ControlsBar>
 
         <ChartSection>
           <Card style={{ gridColumn: 'span 2' }}>
             <CardTitle><FiBarChart2 /> Tickets Resolved by Team</CardTitle>
             {loading && resolvedStats.length === 0 ? (
-                <NoDataMessage>Loading charts...</NoDataMessage>
+              <NoDataMessage>Loading charts...</NoDataMessage>
             ) : resolvedStats.length > 0 ? (
-                <PieChartsWrapper>
+              <PieChartsWrapper>
                 {resolvedStats.map((team: any, idx: number) => (
-                    <PieChartContainer key={`pie-${idx}`}>
+                  <PieChartContainer key={`pie-${idx}`}>
                     <TeamLabel>{team.team_name}</TeamLabel>
                     <Chart
-                        type="pie"
-                        data={{
+                      type="pie"
+                      data={{
                         labels: ['Resolved', 'Unresolved'],
                         datasets: [{
-                            data: [Number(team.resolved_count), Number(team.unresolved_count)],
-                            backgroundColor: ['#27ae60', '#e74c3c'],
-                            hoverOffset: 4,
+                          data: [Number(team.resolved_count), Number(team.unresolved_count)],
+                          backgroundColor: ['#27ae60', '#e74c3c'],
+                          hoverOffset: 4,
                         }]
-                        }}
-                        options={{
+                      }}
+                      options={{
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: {
+                          legend: {
                             labels: { color: '#fff', font: { size: 12 } },
                             position: 'bottom'
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: (context) => {
-                                        let label = context.label || '';
-                                        if (label) {
-                                            label += ': ';
-                                        }
-                                        if (context.parsed !== null) {
-                                            label += context.parsed;
-                                        }
-                                        return label;
-                                    }
+                          },
+                          tooltip: {
+                            callbacks: {
+                              label: (context) => {
+                                let label = context.label || '';
+                                if (label) {
+                                  label += ': ';
                                 }
+                                if (context.parsed !== null) {
+                                  label += context.parsed;
+                                }
+                                return label;
+                              }
                             }
+                          }
                         }
-                        }}
+                      }}
                     />
-                    </PieChartContainer>
+                  </PieChartContainer>
                 ))}
-                </PieChartsWrapper>
+              </PieChartsWrapper>
             ) : (
-                <NoDataMessage>No data for Tickets Resolved by Team.</NoDataMessage>
+              <NoDataMessage>No data for Tickets Resolved by Team.</NoDataMessage>
             )}
           </Card>
 
           <Card style={{ gridColumn: 'span 2' }}>
             <CardTitle><FiBarChart2 /> SLA Compliance per Team</CardTitle>
             {loading && teamStats.length === 0 ? (
-                <NoDataMessage>Loading chart...</NoDataMessage>
+              <NoDataMessage>Loading chart...</NoDataMessage>
             ) : teamStats.length > 0 ? (
-                <ChartWrapper>
+              <ChartWrapper>
                 <Bar
-                    data={{
+                  data={{
                     labels: teamStats.map((team: any) => team.team_name),
                     datasets: [
-                        {
+                      {
                         label: 'Within SLA',
                         data: teamStats.map((team: any) => Number(team.within_sla)),
                         backgroundColor: '#27ae60'
-                        },
-                        {
+                      },
+                      {
                         label: 'Outside SLA',
                         data: teamStats.map((team: any) =>
-                            Number(team.total_tickets) - Number(team.within_sla)
+                          Number(team.total_tickets) - Number(team.within_sla)
                         ),
                         backgroundColor: '#e74c3c'
-                        }
+                      }
                     ]
-                    }}
-                    options={{
+                  }}
+                  options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: {
+                      y: {
                         stacked: true,
                         beginAtZero: true,
                         ticks: { color: '#fff' },
                         title: { display: true, text: 'Number of Tickets', color: '#fff' }
-                        },
-                        x: { stacked: true, ticks: { color: '#fff' } }
+                      },
+                      x: { stacked: true, ticks: { color: '#fff' } }
                     },
                     plugins: {
-                        legend: { labels: { color: '#fff' } },
-                        tooltip: {
+                      legend: { labels: { color: '#fff' } },
+                      tooltip: {
                         callbacks: {
-                            label: function (context) {
+                          label: function (context) {
                             const label = context.dataset.label || '';
                             const value = context.parsed.y;
                             return `${label}: ${value} tickets`;
-                            }
+                          }
                         }
-                        }
+                      }
                     }
-                    }}
+                  }}
                 />
-                </ChartWrapper>
+              </ChartWrapper>
             ) : (
-                <NoDataMessage>No SLA data available for teams.</NoDataMessage>
+              <NoDataMessage>No SLA data available for teams.</NoDataMessage>
             )}
           </Card>
 
           <Card>
             <CardTitle><FiClock /> Avg. Resolution Time (Minutes) by Team</CardTitle>
-             {loading && resolutionStats.length === 0 ? (
-                <NoDataMessage>Loading chart...</NoDataMessage>
+            {loading && resolutionStats.length === 0 ? (
+              <NoDataMessage>Loading chart...</NoDataMessage>
             ) : resolutionStats.length > 0 ? (
-                <ChartWrapper>
+              <ChartWrapper>
                 <Bar
-                    data={{
+                  data={{
                     labels: resolutionStats.map((r: any) => r.team),
                     datasets: [{
-                        label: 'Resolution Time (min)',
-                        data: resolutionStats.map((r: any) => r.timeInMinutes),
-                        backgroundColor: '#f39c12'
+                      label: 'Resolution Time (min)',
+                      data: resolutionStats.map((r: any) => r.timeInMinutes),
+                      backgroundColor: '#f39c12'
                     }]
-                    }}
-                    options={{
+                  }}
+                  options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: {
+                      y: {
                         beginAtZero: true,
                         ticks: { color: '#fff' },
                         title: { display: true, text: 'Minutes', color: '#fff' }
-                        },
-                        x: { ticks: { color: '#fff' } }
+                      },
+                      x: { ticks: { color: '#fff' } }
                     },
                     plugins: { legend: { labels: { color: '#fff' } } }
-                    }}
+                  }}
                 />
-                </ChartWrapper>
+              </ChartWrapper>
             ) : (
-                <NoDataMessage>No resolution time data available for teams.</NoDataMessage>
+              <NoDataMessage>No resolution time data available for teams.</NoDataMessage>
             )}
           </Card>
 
@@ -559,54 +606,54 @@ const TeamCharts = () => {
           <Card style={{ gridColumn: 'span 2' }}>
             <CardTitle><FiBarChart2 /> Volume by Status Per Team</CardTitle>
             {loading && statusStats.length === 0 ? (
-                <NoDataMessage>Loading chart...</NoDataMessage>
+              <NoDataMessage>Loading chart...</NoDataMessage>
             ) : statusStats.length > 0 ? (
-                <ChartWrapper>
+              <ChartWrapper>
                 <Bar
-                    data={volumeDataset} 
-                    options={{
+                  data={volumeDataset}
+                  options={{
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: {
+                      y: {
                         beginAtZero: true,
-                        stacked: false, 
+                        stacked: false,
                         ticks: { color: '#fff' },
                         title: { display: true, text: 'Ticket Count', color: '#fff' },
-                        },
-                        x: {
+                      },
+                      x: {
                         ticks: {
-                            color: '#fff',
-                            callback: (val:any, index:number) => { 
+                          color: '#fff',
+                          callback: (val: any, index: number) => {
                             const label = volumeDataset.labels[index];
-                            return label?.split(' - ')[1] || ''; 
-                            },
+                            return label?.split(' - ')[1] || '';
+                          },
                         },
-                        },
+                      },
                     },
                     plugins: {
-                        legend: { display: false }, 
-                        tooltip: {
-                            callbacks: {
-                                title: (tooltipItems) => { 
-                                    return tooltipItems[0].label;
-                                },
-                                label: (context) => {
-                                    return `Count: ${context.parsed.y}`;
-                                }
-                            }
-                        },
-                        // @ts-ignore because customLabels is a custom option
-                        customLabels: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          title: (tooltipItems) => {
+                            return tooltipItems[0].label;
+                          },
+                          label: (context) => {
+                            return `Count: ${context.parsed.y}`;
+                          }
+                        }
+                      },
+                      // @ts-ignore because customLabels is a custom option
+                      customLabels: {
                         teamNames: teamNamesForCustomLabel,
                         statusCount: statusOrder.length,
-                        },
+                      },
                     },
-                    }}
+                  }}
                 />
-                </ChartWrapper>
+              </ChartWrapper>
             ) : (
-                <NoDataMessage>No volume by status data available for teams.</NoDataMessage>
+              <NoDataMessage>No volume by status data available for teams.</NoDataMessage>
             )}
           </Card>
         </ChartSection>

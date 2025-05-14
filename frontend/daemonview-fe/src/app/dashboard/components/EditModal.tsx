@@ -44,6 +44,11 @@ const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSa
     onClose();
   };
 
+  const statusOrder = ['Open', 'In_Progress', 'Resolved', 'Closed'];
+  const normalizedStatus = ticket.status.replace(/ /g, '_');
+  const currentStatusIndex = statusOrder.findIndex(s => s.toLowerCase() === normalizedStatus.toLowerCase());
+  const allowedStatuses = statusOrder.slice(currentStatusIndex);
+
   return (
     <Overlay>
       <Modal>
@@ -52,12 +57,17 @@ const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSa
           <FiX onClick={onClose} style={{ cursor: 'pointer' }} />
         </Header>
         <Label>
-          Status:
-          <StyledSelect value={status} onChange={(e) => setStatus(e.target.value)}>
-            {statusOptions.map((s, idx) => (
-              <option key={idx} value={s}>{s}</option>
-            ))}
-          </StyledSelect>
+          <Label>
+            Status:
+            <StyledSelect value={status} onChange={(e) => setStatus(e.target.value)}>
+              {allowedStatuses.map((s, idx) => (
+                <option key={idx} value={s}>
+                  {s}
+                </option>
+              ))}
+            </StyledSelect>
+          </Label>
+
         </Label>
 
         <Label>

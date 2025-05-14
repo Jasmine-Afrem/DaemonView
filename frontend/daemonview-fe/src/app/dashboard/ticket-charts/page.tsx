@@ -60,15 +60,22 @@ const TicketCharts = () => {
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [isClosingPopup, setIsClosingPopup] = useState(false);
 
+  // --- ACTUAL APPLIED FILTERS ---
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  // const [filterAssignedTo, setFilterAssignedTo] = useState(''); // Optional: If you also want to filter by assigned_to from UI
+  const [filterPriority, setFilterPriority] = useState('All'); // Default to 'All'
+
+  // --- TEMPORARY FILTERS FOR THE POPUP ---
+  const [tempFilterStartDate, setTempFilterStartDate] = useState('');
+  const [tempFilterEndDate, setTempFilterEndDate] = useState('');
+  const [tempFilterPriority, setTempFilterPriority] = useState('All');
 
   const [activeFiltersForDisplay, setActiveFiltersForDisplay] = useState<ActiveFilterDisplay[]>([]);
 
+  // NEW: Add filtersApplied state, similar to TeamCharts
+  const [filtersApplied, setFiltersApplied] = useState(false);
+
   const priorityOptions = ['All', 'Low', 'Medium', 'High', 'Critical'];
-  // const assigneeOptions = ['All', 'User1', 'User2', 'User3']; // Example if you add assigned_to filter to UI
 
   interface ResolvedTicketStats {
     total_tickets: number;
@@ -89,30 +96,16 @@ const TicketCharts = () => {
     percentage: string;
   }
 
-  // CHANGED: buildChartApiQueryString to send snake_case and 'priority'
   const buildChartApiQueryString = (): string => {
     const params = new URLSearchParams();
-    if (filterStartDate) params.append('start_date', filterStartDate); // Changed to snake_case
-    if (filterEndDate) params.append('end_date', filterEndDate);     // Changed to snake_case
-
-    // This 'priority' will be sent. Your backend needs to accept it.
-    // The backend examples you showed accept 'assigned_to' NOT 'priority'.
-    // Make sure your backend Stored Procedures are updated to use 'priority'
-    // OR change this to send 'assigned_to' if filterPriority state actually holds an assignee.
+    if (filterStartDate) params.append('start_date', filterStartDate);
+    if (filterEndDate) params.append('end_date', filterEndDate);
     if (filterPriority && filterPriority !== 'All') {
       params.append('priority', filterPriority);
     }
-
-    // Example: If you also had an 'assigned_to' filter from the UI:
-    // if (filterAssignedTo && filterAssignedTo !== 'All') {
-    //   params.append('assigned_to', filterAssignedTo);
-    // }
-
     return params.toString();
   };
 
-  // --- Data fetching functions (fetchTicketsByStatus, etc.) remain unchanged ---
-  // They already use buildChartApiQueryString
   const fetchTicketsByStatus = async () => {
     const queryString = buildChartApiQueryString();
     try {
@@ -183,23 +176,41 @@ const TicketCharts = () => {
   };
 
   const refreshAllChartData = async () => {
+    console.log("TicketCharts: Refreshing chart data with filters:", { filterStartDate, filterEndDate, filterPriority });
     setLoading(true);
-    await Promise.all([
-        fetchTicketsByStatus(),
-        fetchResolvedTickets(),
-        fetchSLACompliance(),
-        fetchAvgResolutionTime()
-    ]);
-    setLoading(false);
+    try {
+      await Promise.all([
+          fetchTicketsByStatus(),
+          fetchResolvedTickets(),
+          fetchSLACompliance(),
+          fetchAvgResolutionTime()
+      ]);
+    } catch (error) {
+        console.error("TicketCharts: Error in refreshAllChartData Promise.all:", error);
+    } finally {
+        setLoading(false);
+    }
   };
 
+  // CHANGED: Replaced old useEffect with two new ones for filter logic
+  // useEffect for initial data load
   useEffect(() => {
+    console.log("TicketCharts: Initial data load on component mount.");
     refreshAllChartData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Initial data load
+  }, []); // Empty dependency array for initial mount
 
-  // --- Filter handling functions (closePopup, toggleFilterPopup, etc.) remain unchanged ---
-  // They correctly manage UI state and call refreshAllChartData
+  // useEffect to refresh data when filter values change AND filtersApplied is true
+  useEffect(() => {
+    if (filtersApplied) {
+      console.log("TicketCharts: filtersApplied is true, triggering data refresh via useEffect.");
+      refreshAllChartData();
+      setFiltersApplied(false); // Reset the flag after refreshing
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStartDate, filterEndDate, filterPriority, filtersApplied]);
+
+
   const closePopup = () => {
     setIsClosingPopup(true);
     setTimeout(() => {
@@ -212,73 +223,81 @@ const TicketCharts = () => {
     if (showFilterPopup) {
       closePopup();
     } else {
+      setTempFilterStartDate(filterStartDate);
+      setTempFilterEndDate(filterEndDate);
+      setTempFilterPriority(filterPriority);
       setShowFilterPopup(true);
       setIsClosingPopup(false);
     }
   };
 
-  // handleApplyFilters, handleRemoveFilter, handleClearAllFilters remain the same
-  // as they correctly update the state and call refreshAllChartData which uses the
-  // updated buildChartApiQueryString.
+  const handleApplyPopupFilters = () => {
+    setFilterStartDate(tempFilterStartDate);
+    setFilterEndDate(tempFilterEndDate);
+    setFilterPriority(tempFilterPriority);
 
-  const handleApplyFilters = () => {
     const activeFilters: ActiveFilterDisplay[] = [];
-    if (filterStartDate) {
-      activeFilters.push({ key: 'startDate', label: 'Start Date', value: filterStartDate });
-    }
-    if (filterEndDate) {
-      activeFilters.push({ key: 'endDate', label: 'End Date', value: filterEndDate });
-    }
-    if (filterPriority && filterPriority !== 'All') {
-      activeFilters.push({ key: 'priority', label: 'Priority', value: filterPriority });
-    }
-    // Example: If you add assignedTo filter
-    // if (filterAssignedTo && filterAssignedTo !== 'All') {
-    //   activeFilters.push({ key: 'assignedTo', label: 'Assigned To', value: filterAssignedTo });
-    // }
+    if (tempFilterStartDate) activeFilters.push({ key: 'startDate', label: 'Start Date', value: tempFilterStartDate });
+    if (tempFilterEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: tempFilterEndDate });
+    if (tempFilterPriority && tempFilterPriority !== 'All') activeFilters.push({ key: 'priority', label: 'Priority', value: tempFilterPriority });
     setActiveFiltersForDisplay(activeFilters);
-    refreshAllChartData();
+
+    // refreshAllChartData(); // REMOVE THIS
+    setFiltersApplied(true); // ADD THIS
     closePopup();
   };
 
-  const handleRemoveFilter = (filterToRemoveKey: ActiveFilterDisplay['key']) => { // Use ActiveFilterDisplay['key']
+
+  const handleClearPopupAndApplyFilters = () => {
+    setTempFilterStartDate('');
+    setTempFilterEndDate('');
+    setTempFilterPriority('All');
+
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setFilterPriority('All');
+
+    setActiveFiltersForDisplay([]);
+
+    // refreshAllChartData(); // REMOVE THIS
+    setFiltersApplied(true); // ADD THIS
+    closePopup();
+  };
+
+  const handleRemoveActiveFilterTag = (filterToRemoveKey: ActiveFilterDisplay['key']) => {
     let newStartDate = filterStartDate;
     let newEndDate = filterEndDate;
     let newPriority = filterPriority;
-    // let newAssignedTo = filterAssignedTo; // Example
 
     if (filterToRemoveKey === 'startDate') newStartDate = '';
     if (filterToRemoveKey === 'endDate') newEndDate = '';
     if (filterToRemoveKey === 'priority') newPriority = 'All';
-    // if (filterToRemoveKey === 'assignedTo') newAssignedTo = 'All'; // Example
 
     setFilterStartDate(newStartDate);
     setFilterEndDate(newEndDate);
     setFilterPriority(newPriority);
-    // setFilterAssignedTo(newAssignedTo); // Example
 
     const activeFilters: ActiveFilterDisplay[] = [];
     if (newStartDate) activeFilters.push({ key: 'startDate', label: 'Start Date', value: newStartDate });
     if (newEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: newEndDate });
     if (newPriority && newPriority !== 'All') activeFilters.push({ key: 'priority', label: 'Priority', value: newPriority });
-    // if (newAssignedTo && newAssignedTo !== 'All') activeFilters.push({ key: 'assignedTo', label: 'Assigned To', value: newAssignedTo }); // Example
     setActiveFiltersForDisplay(activeFilters);
 
-    refreshAllChartData();
+    // refreshAllChartData(); // REMOVE THIS
+    setFiltersApplied(true); // ADD THIS
   };
 
   const handleClearAllFilters = () => {
     setFilterStartDate('');
     setFilterEndDate('');
     setFilterPriority('All');
-    // setFilterAssignedTo('All'); // Example
     setActiveFiltersForDisplay([]);
-    refreshAllChartData();
+    
+    setFiltersApplied(true); // ADD THIS
     closePopup();
+    // NO explicit refreshAllChartData() call needed here.
   };
 
-
-  // --- Auth, Profile, Logout, Sidebar Icons, Chart Data/Options remain unchanged ---
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -384,8 +403,6 @@ const TicketCharts = () => {
   };
 
 
-  // --- JSX remains largely unchanged ---
-  // The filter popup already uses filterStartDate, filterEndDate, filterPriority states.
   return (
     <Wrapper>
       <Sidebar $isOpen={sidebarOpen}>
@@ -422,7 +439,7 @@ const TicketCharts = () => {
                   {activeFiltersForDisplay.map((filter) => (
                     <FilterTag key={filter.key}>
                       {filter.label}: {filter.value}
-                      <FilterTagX onClick={() => handleRemoveFilter(filter.key)} />
+                      <FilterTagX onClick={() => handleRemoveActiveFilterTag(filter.key)} />
                     </FilterTag>
                   ))}
                 </AppliedFilters>
@@ -439,57 +456,44 @@ const TicketCharts = () => {
                   >
                     <h4>Filter Options</h4>
 
-                    <label className={filterStartDate ? 'active' : ''}>
+                    <label className={tempFilterStartDate ? 'active' : ''}>
                       Start Date:
                       <input
                         type="date"
-                        value={filterStartDate}
-                        onChange={(e) => setFilterStartDate(e.target.value)}
-                        max={filterEndDate || new Date().toISOString().split('T')[0]}
+                        value={tempFilterStartDate}
+                        onChange={(e) => setTempFilterStartDate(e.target.value)}
+                        max={tempFilterEndDate || new Date().toISOString().split('T')[0]}
                       />
                     </label>
 
-                    <label className={filterEndDate ? 'active' : ''}>
+                    <label className={tempFilterEndDate ? 'active' : ''}>
                       End Date:
                       <input
                         type="date"
-                        value={filterEndDate}
-                        onChange={(e) => setFilterEndDate(e.target.value)}
-                        min={filterStartDate}
+                        value={tempFilterEndDate}
+                        onChange={(e) => setTempFilterEndDate(e.target.value)}
+                        min={tempFilterStartDate}
                         max={new Date().toISOString().split('T')[0]}
                       />
                     </label>
 
-                    <label className={filterPriority && filterPriority !== 'All' ? 'active' : ''}>
+                    <label className={tempFilterPriority && tempFilterPriority !== 'All' ? 'active' : ''}>
                       Priority:
                       <select
-                        value={filterPriority}
-                        onChange={(e) => setFilterPriority(e.target.value)}
+                        value={tempFilterPriority}
+                        onChange={(e) => setTempFilterPriority(e.target.value)}
                       >
                         {priorityOptions.map((priority) => (
                           <option key={priority} value={priority}>{priority}</option>
                         ))}
                       </select>
                     </label>
-                    {/* Example: If you add assignedTo filter UI
-                    <label className={filterAssignedTo && filterAssignedTo !== 'All' ? 'active' : ''}>
-                      Assigned To:
-                      <select
-                        value={filterAssignedTo}
-                        onChange={(e) => setFilterAssignedTo(e.target.value)}
-                      >
-                        {assigneeOptions.map((assignee) => (
-                          <option key={assignee} value={assignee}>{assignee}</option>
-                        ))}
-                      </select>
-                    </label>
-                    */}
 
                     <FilterPopupActions>
-                        <ClearFilterButton onClick={handleClearAllFilters}>
+                        <ClearFilterButton onClick={handleClearPopupAndApplyFilters}>
                             Clear All
                         </ClearFilterButton>
-                        <ApplyFilterButton onClick={handleApplyFilters}>
+                        <ApplyFilterButton onClick={handleApplyPopupFilters}>
                             Apply
                         </ApplyFilterButton>
                     </FilterPopupActions>

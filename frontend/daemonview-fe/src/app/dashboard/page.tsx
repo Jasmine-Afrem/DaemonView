@@ -88,6 +88,53 @@ const DaemonView = () => {
     setFilterDate('');
   }, [selectedColumn]);
 
+  const refreshTableWithFilters = async () => {
+    const queryParams = new URLSearchParams();
+
+    appliedFilters.forEach((column, filterKey) => {
+      const [filterColumn, value] = filterKey.split(': ');
+      if (filterColumn && value) {
+        queryParams.append(filterColumn.toLowerCase(), value);
+      }
+    });
+
+    queryParams.append('page', currentPage.toString());
+    queryParams.append('limit', pageSize.toString());
+
+    try {
+      const res = await fetch(`http://localhost:8080/api/get-tickets?${queryParams.toString()}`);
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid JSON response');
+      }
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const ticketsWithDates = data.tickets.map((t: any) => ({
+          ...t,
+          created_at: t.created_at ? new Date(t.created_at) : null,
+          updated_at: t.updated_at ? new Date(t.updated_at) : null,
+          close_date: t.close_date ? new Date(t.close_date) : null,
+          completed_date: t.completed_date ? new Date(t.completed_date) : null,
+          deadline: t.deadline ? new Date(t.deadline) : null,
+        }));
+
+        setTickets(ticketsWithDates);
+        setTotalPages(data.totalPages);
+      } else {
+        console.error('API error:', data);
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error('Failed to fetch tickets:', err.message);
+      } else {
+        console.error('Failed to fetch tickets:', err);
+      }
+    }
+  };
+
+
   const handleUpdateTicket = async (updatedTicket: Partial<Ticket> & { notes?: string }) => {
     try {
       const res = await fetch('http://localhost:8080/api/update-ticket', {
@@ -102,27 +149,27 @@ const DaemonView = () => {
           notes: updatedTicket.notes,
         }),
       });
-  
+
       const data = await res.json();
-  
+
       if (!res.ok) {
         console.error('Update failed:', data.message);
         return;
       }
-  
-      await handleApplyFilter();
-  
+
+      await refreshTableWithFilters();
+
       setSuccessPopupVisible(true);
       setTimeout(() => {
         setSuccessPopupVisible(false);
       }, 3000);
-  
+
       setShowEditModal(false);
     } catch (err) {
       console.error('Update error:', err);
     }
   };
-  
+
 
 
   const handleApplyFilter = async () => {
@@ -338,10 +385,13 @@ const DaemonView = () => {
   };
 
   const handleInfoClick = (ticket: Ticket) => {
-    if (ticket.status !== 'closed') {
+    if (ticket.status !== 'closed' && ticket.assigned_to === username) {
       setSelectedTicket(ticket);
       setShowEditModal(true);
+    } else {
+      alert('You can only edit tickets assigned to you.');
     }
+
   };
 
   {
@@ -543,12 +593,22 @@ const DaemonView = () => {
                 {tickets.map((ticket, idx) => (
                   <tr key={`ticket-${idx}`}>
                     <td>
-                      {ticket.status !== 'closed' ? (
-                        <FiEdit style={{ cursor: 'pointer' }} onClick={() => handleInfoClick(ticket)} />
+                      {ticket.status !== 'closed' && ticket.assigned_to === username ? (
+                        <FiEdit
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleInfoClick(ticket)}
+                        />
                       ) : (
-                        <FiEdit style={{ opacity: 0.3, cursor: 'not-allowed' }} />
+                        <FiEdit
+                          style={{
+                            opacity: 0.3,
+                            cursor: 'not-allowed'
+                          }}
+                          title="Not editable"
+                        />
                       )}
                     </td>
+
                     <td>{ticket.ticket_id || 'No ID'}</td>
                     <td>{ticket.description || 'No Description'}</td>
                     <td>{ticket.status || 'No Status'}</td>
@@ -629,10 +689,10 @@ const DaemonView = () => {
 
         </TableSection>
         {successPopupVisible && (
-  <PopupContainer>
-    <PopupMessage>Ticket updated successfully!</PopupMessage>
-  </PopupContainer>
-)}
+          <PopupContainer>
+            <PopupMessage>Ticket updated successfully!</PopupMessage>
+          </PopupContainer>
+        )}
 
         {showEditModal && selectedTicket && (
           <EditTicketModal

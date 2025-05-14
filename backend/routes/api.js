@@ -4,11 +4,11 @@ const bcrypt = require('bcrypt');
 const mysql = require('mysql2');
 
 const db = mysql.createPool({
-  host: '6.tcp.eu.ngrok.io',
+  host: '0.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 18049,
+  port: 18648,
 }).promise();
 
 // GET /api/check-auth
@@ -161,12 +161,12 @@ router.put('/update-ticket', async (req, res) => {
 
 // GET /api/sla-compliance
 router.get('/sla-compliance', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       'CALL get_sla_compliance_filtered(?, ?, ?)',
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[1]);
   } catch (err) {
@@ -177,12 +177,12 @@ router.get('/sla-compliance', async (req, res) => {
 
 // GET /api/tickets-resolved
 router.get('/tickets-resolved', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       'CALL get_resolution_status_filtered(?, ?, ?)',
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[1]);
   } catch (err) {
@@ -193,12 +193,12 @@ router.get('/tickets-resolved', async (req, res) => {
 
 // GET /api/tickets-by-status
 router.get('/tickets-by-status', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       `CALL get_status_summary_filtered(?, ?, ?)`,
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[1]);
   } catch (err) {
@@ -209,12 +209,12 @@ router.get('/tickets-by-status', async (req, res) => {
 
 // GET /api/resolution-time
 router.get('/resolution-time', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       `CALL get_average_resolution_time(?, ?, ?)`,
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -225,12 +225,12 @@ router.get('/resolution-time', async (req, res) => {
 
 // GET /api/sla-compliance-teams
 router.get('/sla-compliance-teams', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       'CALL get_sla_compliance_filtered_by_team(?, ?, ?)',
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[1]);
   } catch (err) {
@@ -241,12 +241,12 @@ router.get('/sla-compliance-teams', async (req, res) => {
 
 // GET /api/tickets-resolved-teams
 router.get('/tickets-resolved-teams', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       'CALL get_resolution_status_filtered_by_team(?, ?, ?)',
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[1]);
   } catch (err) {
@@ -257,12 +257,12 @@ router.get('/tickets-resolved-teams', async (req, res) => {
 
 // GET /api/tickets-by-status-teams
 router.get('/tickets-by-status-teams', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       `CALL get_status_summary_filtered_by_team(?, ?, ?)`,
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[1]);
   } catch (err) {
@@ -273,12 +273,12 @@ router.get('/tickets-by-status-teams', async (req, res) => {
 
 // GET /api/resolution-time-teams
 router.get('/resolution-time-teams', async (req, res) => {
-  const { start_date, end_date, assigned_to } = req.query;
+  const { start_date, end_date, priority } = req.query;
 
   try {
     const [rows] = await db.query(
       `CALL get_average_resolution_time_by_team(?, ?, ?)`,
-      [start_date || null, end_date || null, assigned_to || null]
+      [start_date || null, end_date || null, priority || null]
     );
     res.json(rows[0]);
   } catch (err) {
