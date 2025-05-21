@@ -8,7 +8,7 @@ const db = mysql.createPool({
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 18648,
+  port: 16223,
 }).promise();
 
 // GET /api/check-auth
@@ -168,7 +168,23 @@ router.get('/sla-compliance', async (req, res) => {
       'CALL get_sla_compliance_filtered(?, ?, ?)',
       [start_date || null, end_date || null, priority || null]
     );
-    res.json(rows[1]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error fetching SLA compliance KPI' });
+  }
+});
+
+// GET /api/sla-compliance-tickets
+router.get('/sla-compliance-tickets', async (req, res) => {
+  const { start_date, end_date, priority, sla_status } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_filtered_tickets_by_sla(?, ?, ?, ?)',
+      [start_date || null, end_date || null, priority || null, sla_status || null]
+    );
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error fetching SLA compliance KPI' });
@@ -184,7 +200,23 @@ router.get('/tickets-resolved', async (req, res) => {
       'CALL get_resolution_status_filtered(?, ?, ?)',
       [start_date || null, end_date || null, priority || null]
     );
-    res.json(rows[1]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Error fetching resolved tickets:', err);
+    res.status(500).json({ message: 'Failed to fetch resolved tickets' });
+  }
+});
+
+// GET /api/tickets-resolved-tickets
+router.get('/tickets-resolved-tickets', async (req, res) => {
+  const { start_date, end_date, priority, resolved } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_ticket_resolution_status(?, ?, ?, ?)',
+      [start_date || null, end_date || null, priority || null, resolved || null]
+    );
+    res.json(rows[0]);
   } catch (err) {
     console.error('Error fetching resolved tickets:', err);
     res.status(500).json({ message: 'Failed to fetch resolved tickets' });
@@ -200,7 +232,23 @@ router.get('/tickets-by-status', async (req, res) => {
       `CALL get_status_summary_filtered(?, ?, ?)`,
       [start_date || null, end_date || null, priority || null]
     );
-    res.json(rows[1]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
+  }
+});
+
+// GET /api/tickets-by-status-tickets
+router.get('/tickets-by-status-tickets', async (req, res) => {
+  const { start_date, end_date, priority, status } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      `CALL get_ticket_status_details(?, ?, ?, ?)`,
+      [start_date || null, end_date || null, priority || null, status || null]
+    );
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
@@ -232,7 +280,23 @@ router.get('/sla-compliance-teams', async (req, res) => {
       'CALL get_sla_compliance_filtered_by_team(?, ?, ?)',
       [start_date || null, end_date || null, priority || null]
     );
-    res.json(rows[1]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error fetching SLA compliance KPI' });
+  }
+});
+
+// GET /api/sla-compliance-teams-tickets
+router.get('/sla-compliance-teams-tickets', async (req, res) => {
+  const { start_date, end_date, priority, sla_status, team } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_sla_compliance_tickets_by_team(?, ?, ?, ?, ?)',
+      [start_date || null, end_date || null, priority || null, team || null, sla_status || null], 
+    );
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error fetching SLA compliance KPI' });
@@ -248,7 +312,23 @@ router.get('/tickets-resolved-teams', async (req, res) => {
       'CALL get_resolution_status_filtered_by_team(?, ?, ?)',
       [start_date || null, end_date || null, priority || null]
     );
-    res.json(rows[1]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('Error fetching resolved tickets:', err);
+    res.status(500).json({ message: 'Failed to fetch resolved tickets' });
+  }
+});
+
+// GET /api/tickets-resolved-teams-tickets
+router.get('/tickets-resolved-teams-tickets', async (req, res) => {
+  const { start_date, end_date, priority, resolved, team } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      'CALL get_ticket_resolution_by_team(?, ?, ?, ?, ?)',
+      [start_date || null, end_date || null, priority || null, team || null, resolved || null]
+    );
+    res.json(rows[0]);
   } catch (err) {
     console.error('Error fetching resolved tickets:', err);
     res.status(500).json({ message: 'Failed to fetch resolved tickets' });
@@ -264,7 +344,23 @@ router.get('/tickets-by-status-teams', async (req, res) => {
       `CALL get_status_summary_filtered_by_team(?, ?, ?)`,
       [start_date || null, end_date || null, priority || null]
     );
-    res.json(rows[1]);
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
+  }
+});
+
+// GET /api/tickets-by-status-teams-tickets
+router.get('/tickets-by-status-teams-tickets', async (req, res) => {
+  const { start_date, end_date, priority, status, team } = req.query;
+
+  try {
+    const [rows] = await db.query(
+      `CALL get_ticket_details_status_by_team(?, ?, ?, ?, ?)`,
+      [start_date || null, end_date || null, priority || null, team || null, status || null]
+    );
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Failed to fetch ticket counts by status' });
