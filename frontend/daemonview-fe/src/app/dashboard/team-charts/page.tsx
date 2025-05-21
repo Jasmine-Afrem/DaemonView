@@ -22,6 +22,9 @@ import {
   FiGrid,
   FiTag
 } from 'react-icons/fi';
+import TeamDrillModal from '../components/TeamDrillModal';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
+ChartJS.register(ChartDataLabels);
 
 ChartJS.register(
   BarElement, LineElement, CategoryScale,
@@ -88,6 +91,44 @@ const TeamCharts = () => {
   const [activeFiltersForDisplay, setActiveFiltersForDisplay] = useState<ActiveFilterDisplay[]>([]);
   const [filtersApplied, setFiltersApplied] = useState(false); // Flag to trigger useEffect
 
+  const [drillData, setDrillData] = useState<any | null>(null);
+  const [showDrillModal, setShowDrillModal] = useState(false);
+  const handleDrillClick = async (teamName: string, category: string, drillType: string) => {
+    let tickets: any[] = [];
+  
+    if (drillType === 'slaCompliance' && (category === 'Within SLA' || category === 'Outside SLA')) {
+    const slaStatus = category === 'Within SLA' ? 'Yes' : 'No';
+    tickets = await fetchDrillTicketsForSLA({
+      start_date: filterStartDate,
+      end_date: filterEndDate,
+      priority: filterPriority,
+      sla_status: slaStatus,
+      team: teamName
+    });
+  } else if (drillType === 'resolutionState' && (category === 'Resolved' || category === 'Unresolved')) {
+    const resolvedValue = category === 'Resolved' ? 'yes' : 'no';
+    tickets = await fetchDrillTicketsForResolved({
+      start_date: filterStartDate,
+      end_date: filterEndDate,
+      priority: filterPriority,
+      resolved: resolvedValue,
+      team: teamName
+    });
+  } else if (drillType === 'ticketStatus' && ['Open', 'In_progress', 'Resolved', 'Closed'].includes(category)) {
+    const normalizedStatus = category.toLowerCase();
+    tickets = await fetchDrillTicketsByStatus({
+      start_date: filterStartDate,
+      end_date: filterEndDate,
+      priority: filterPriority,
+      status: normalizedStatus,
+      team: teamName
+    });
+    }
+    
+    setDrillData({ team: teamName, category, tickets });
+    setShowDrillModal(true);
+  };
+
   const buildChartApiQueryString = (): string => {
     const params = new URLSearchParams();
     if (filterStartDate) params.append('start_date', filterStartDate);
@@ -127,7 +168,7 @@ const TeamCharts = () => {
       activeFilters.push({ key: 'priority', label: 'Priority', value: filterPriority });
     }
     setActiveFiltersForDisplay(activeFilters);
-    setFiltersApplied(true); 
+    setFiltersApplied(true);
     // refreshAllTeamChartData();
     closePopup();
   };
@@ -137,42 +178,42 @@ const TeamCharts = () => {
     let newStartDate = filterStartDate;
     let newEndDate = filterEndDate;
     let newPriority = filterPriority;
-  
+
     if (filterToRemoveKey === 'startDate') newStartDate = '';
     if (filterToRemoveKey === 'endDate') newEndDate = '';
     if (filterToRemoveKey === 'priority') newPriority = '';
-  
+
     setFilterStartDate(newStartDate);
     setFilterEndDate(newEndDate);
     setFilterPriority(newPriority);
-  
+
     const updatedFiltersForDisplay: ActiveFilterDisplay[] = [];
     if (newStartDate) updatedFiltersForDisplay.push({ key: 'startDate', label: 'Start Date', value: newStartDate });
     if (newEndDate) updatedFiltersForDisplay.push({ key: 'endDate', label: 'End Date', value: newEndDate });
     if (newPriority) updatedFiltersForDisplay.push({ key: 'priority', label: 'Priority', value: newPriority });
     setActiveFiltersForDisplay(updatedFiltersForDisplay);
-    
+
     setFiltersApplied(true);
     // setTimeout(() => { refreshAllTeamChartData(); }, 0); 
   };
-    
+
   const handleClearAllFilters = () => {
     setFilterStartDate('');
     setFilterEndDate('');
     setFilterPriority('');
     setActiveFiltersForDisplay([]);
-    setFiltersApplied(true); 
+    setFiltersApplied(true);
     closePopup();
   };
 
- 
+
   useEffect(() => {
     if (filtersApplied) {
       refreshAllTeamChartData();
-      setFiltersApplied(false); 
+      setFiltersApplied(false);
     }
   }, [filterStartDate, filterEndDate, filterPriority, filtersApplied]);
-  
+
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -196,7 +237,7 @@ const TeamCharts = () => {
 
   const fetchSLAData = async () => {
     const queryString = buildChartApiQueryString();
-    setLoading(true); 
+    setLoading(true);
     try {
       const res = await fetch(`http://localhost:8080/api/sla-compliance-teams${queryString ? `?${queryString}` : ''}`, {
         method: 'GET', credentials: 'include'
@@ -214,6 +255,68 @@ const TeamCharts = () => {
     }
     // setLoading(false);
   };
+
+  const fetchDrillTicketsForSLA = async ({
+    start_date,
+    end_date,
+    priority,
+    sla_status,
+    team
+  }: {
+    start_date?: string;
+    end_date?: string;
+    priority?: string;
+    sla_status?: string;
+    team: string;
+  }) => {
+    try {
+      const params = new URLSearchParams();
+  
+      if (start_date) params.append('start_date', start_date);
+      if (end_date) params.append('end_date', end_date);
+      if (priority) params.append('priority', priority);
+      if (sla_status) params.append('sla_status', sla_status);
+      params.append('team', team);
+  
+      const response = await fetch(`http://localhost:8080/api/sla-compliance-teams-tickets?${params.toString()}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+  
+      const rawData = await response.json();
+  
+      // Convertim datele primite în format compatibil cu `Ticket` (folosit de `TeamDrillModal`)
+      const mappedTickets = rawData.map((t: any) => ({
+        ticket_id: String(t['Ticket ID']),
+        description: t['Description'],
+        status: t['Status'],
+        priority: t['Priority'],
+        created_at: t['Created At'],
+        updated_at: t['Updated At'],
+        submitted_by: t['Submitted By'],
+        assigned_to: t['Assigned To'],
+        close_date: t['Close Date'],
+        completed_date: t['Completed Date'],
+        sla_hours: t['SLA (Hours)'],
+        deadline: t['Deadline'],
+        within_sla: t['Within SLA'] === 1,
+        related_incidents: t['Related Incidents'],
+        related_devices: t['Related Devices'],
+        notes: t['Info'] || ''  // opțional
+      }));
+  
+      return mappedTickets;
+    } catch (err) {
+      console.error('Failed to fetch SLA drill tickets:', err);
+      return [];
+    }
+  };
+  
 
   const fetchResolvedData = async () => {
     const queryString = buildChartApiQueryString();
@@ -236,6 +339,67 @@ const TeamCharts = () => {
     // setLoading(false);
   };
 
+  const fetchDrillTicketsForResolved = async ({
+    start_date,
+    end_date,
+    priority,
+    resolved,
+    team
+  }: {
+    start_date?: string;
+    end_date?: string;
+    priority?: string;
+    resolved?: string;  // trebuie să fie 'Resolved' sau 'Unresolved'
+    team: string;
+  }) => {
+    try {
+      const params = new URLSearchParams();
+  
+      if (start_date) params.append('start_date', start_date);
+      if (end_date) params.append('end_date', end_date);
+      if (priority) params.append('priority', priority);
+      if (resolved) params.append('resolved', resolved); // atenție: trebuie să fie 'Resolved'/'Unresolved'
+      params.append('team', team);
+  
+      const response = await fetch(`http://localhost:8080/api/tickets-resolved-teams-tickets?${params.toString()}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+  
+      const rawData = await response.json();
+  
+      const mappedTickets = rawData.map((t: any) => ({
+        ticket_id: String(t['Ticket ID']),
+        description: t['Description'],
+        status: t['Status'],
+        priority: t['Priority'],
+        created_at: t['Created At'],
+        updated_at: t['Updated At'],
+        submitted_by: t['Submitted By'],
+        assigned_to: t['Assigned To'],
+        close_date: t['Close Date'],
+        completed_date: t['Completed Date'],
+        sla_hours: t['SLA (Hours)'],
+        deadline: t['Deadline'],
+        within_sla: t['Within SLA'] === 1,
+        related_incidents: t['Related Incidents'],
+        related_devices: t['Related Devices'],
+        notes: t['Info'] || ''
+      }));
+  
+      return mappedTickets;
+    } catch (err) {
+      console.error('Failed to fetch resolved tickets drill:', err);
+      return [];
+    }
+  };
+  
+
   const fetchStatusVolume = async () => {
     const queryString = buildChartApiQueryString();
     // setLoading(true);
@@ -256,6 +420,67 @@ const TeamCharts = () => {
     }
     // setLoading(false);
   };
+
+  const fetchDrillTicketsByStatus = async ({
+    start_date,
+    end_date,
+    priority,
+    status,
+    team
+  }: {
+    start_date?: string;
+    end_date?: string;
+    priority?: string;
+    status?: string;
+    team: string;
+  }) => {
+    try {
+      const params = new URLSearchParams();
+  
+      if (start_date) params.append('start_date', start_date);
+      if (end_date) params.append('end_date', end_date);
+      if (priority) params.append('priority', priority);
+      if (status) params.append('status', status);
+      params.append('team', team);
+  
+      const response = await fetch(`http://localhost:8080/api/tickets-by-status-teams-tickets?${params.toString()}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
+      console.log(response);
+      const rawData = await response.json();
+  
+      const mappedTickets = rawData.map((t: any) => ({
+        ticket_id: String(t['Ticket ID']),
+        description: t['Description'],
+        status: t['Status'],
+        priority: t['Priority'],
+        created_at: t['Created At'],
+        updated_at: t['Updated At'],
+        submitted_by: t['Submitted By'],
+        assigned_to: t['Assigned To'],
+        close_date: t['Close Date'],
+        completed_date: t['Completed Date'],
+        sla_hours: t['SLA (Hours)'],
+        deadline: t['Deadline'],
+        within_sla: t['Within SLA'] === 1,
+        related_incidents: t['Related Incidents'],
+        related_devices: t['Related Devices'],
+        notes: t['Info'] || ''
+      }));
+  
+      return mappedTickets;
+    } catch (err) {
+      console.error('Failed to fetch tickets by status drill:', err);
+      return [];
+    }
+  };
+  
 
   const convertHHMMSStoMinutes = (str: string | null | undefined): number => {
     if (!str) return 0;
@@ -347,7 +572,8 @@ const TeamCharts = () => {
         data: orderedLabelsForVolumeChart.map((label) => {
           const [team, status] = label.split(' - ');
           const match = statusStats.find(
-            (entry: StatusEntry) => entry.team_name === team && entry.status === status
+            (entry: StatusEntry) => entry.team_name === team && entry.status.toLowerCase().replace(/\s/g, '_') === status.toLowerCase()
+
           );
           return match ? match.ticket_count : 0;
         }),
@@ -478,31 +704,51 @@ const TeamCharts = () => {
                           hoverOffset: 4,
                         }]
                       }}
+                      
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
+                        onClick: (_, elements) => {
+                          if (elements.length > 0) {
+                            const category = elements[0].index === 0 ? 'Resolved' : 'Unresolved';
+                            handleDrillClick(team.team_name, category, 'resolutionState');
+                          }
+                        },
                         plugins: {
                           legend: {
-                            labels: { color: '#fff', font: { size: 12 } },
+                            labels: {
+                              color: '#fff',
+                              font: { size: 12 }
+                            },
                             position: 'bottom'
                           },
                           tooltip: {
                             callbacks: {
                               label: (context) => {
                                 let label = context.label || '';
-                                if (label) {
-                                  label += ': ';
-                                }
-                                if (context.parsed !== null) {
-                                  label += context.parsed;
-                                }
+                                if (label) label += ': ';
+                                if (context.parsed !== null) label += context.parsed;
                                 return label;
                               }
+                            }
+                          },
+                          datalabels: {
+                            color: 'white',
+                            font: {
+                              weight: 'bold',
+                              size: 13,
+                            },
+                            formatter: (value: number, context) => {
+                              const total = context.chart.data.datasets[0].data.reduce((sum, val) => sum + val, 0);
+                              const percentage = ((value / total) * 100).toFixed(0);
+                              return `${value} (${percentage}%)`;
                             }
                           }
                         }
                       }}
+                      
                     />
+
                   </PieChartContainer>
                 ))}
               </PieChartsWrapper>
@@ -524,31 +770,53 @@ const TeamCharts = () => {
                       {
                         label: 'Within SLA',
                         data: teamStats.map((team: any) => Number(team.within_sla)),
-                        backgroundColor: '#27ae60'
+                        backgroundColor: '#27ae60',
+                        barThickness: 70
                       },
                       {
                         label: 'Outside SLA',
                         data: teamStats.map((team: any) =>
                           Number(team.total_tickets) - Number(team.within_sla)
                         ),
-                        backgroundColor: '#e74c3c'
+                        backgroundColor: '#e74c3c',
+                        barThickness: 70
                       }
                     ]
                   }}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                      y: {
-                        stacked: true,
-                        beginAtZero: true,
-                        ticks: { color: '#fff' },
-                        title: { display: true, text: 'Number of Tickets', color: '#fff' }
-                      },
-                      x: { stacked: true, ticks: { color: '#fff' } }
+                    onClick: (_, elements) => {
+                      if (elements.length > 0) {
+                        const clickedBar = elements[0];
+                        const teamIndex = clickedBar.index;
+                        const datasetIndex = clickedBar.datasetIndex;
+                  
+                        const teamName = teamStats[teamIndex].team_name;
+                        const slaLabel = datasetIndex === 0 ? 'Within SLA' : 'Outside SLA';
+                  
+                        handleDrillClick(teamName, slaLabel, 'slaCompliance'); // apelează funcția ta
+                      }
                     },
                     plugins: {
-                      legend: { labels: { color: '#fff' } },
+                      datalabels: {
+                        display: true,
+                        color: '#fff',
+                        anchor: 'center',
+                        align: 'center',
+                        font: {
+                          weight: 'bold',
+                          size: 13,
+                        },
+                        formatter: (value) => value > 0 ? value : '',
+                      },
+                      legend: {
+                        labels: {
+                          color: '#fff',
+                          font: { size: 14 }
+                        },
+                        position: 'top'
+                      },
                       tooltip: {
                         callbacks: {
                           label: function (context) {
@@ -556,10 +824,36 @@ const TeamCharts = () => {
                             const value = context.parsed.y;
                             return `${label}: ${value} tickets`;
                           }
-                        }
+                        },
+                        backgroundColor: 'rgba(0,0,0,0.7)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#fff',
+                        borderWidth: 1,
                       }
+                    },
+                    scales: {
+                      y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: { color: '#fff' },
+                        title: {
+                          display: true,
+                          text: 'Number of Tickets',
+                          color: '#fff'
+                        }
+                      },
+                      x: {
+                        stacked: true,
+                        ticks: { color: '#fff' }
+                      }
+                    },
+                    layout: {
+                      padding: { top: 10, bottom: 10 }
                     }
                   }}
+                  
+                  
                 />
               </ChartWrapper>
             ) : (
@@ -579,22 +873,81 @@ const TeamCharts = () => {
                     datasets: [{
                       label: 'Resolution Time (min)',
                       data: resolutionStats.map((r: any) => r.timeInMinutes),
-                      backgroundColor: '#f39c12'
+                      backgroundColor: '#f39c12',
+                      barThickness: 30
                     }]
                   }}
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'bottom',
+                        labels: {
+                          color: '#fff',
+                          font: { size: 14 },
+                          padding: 20
+                        }
+                      },
+                      
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const value = context.parsed.y;
+                            const hours = Math.floor(value / 60);
+                            const minutes = Math.round(value % 60);
+                            return `Resolution Time: ${hours}h ${minutes}m`;
+                          }
+                        },
+                        backgroundColor: 'rgba(0,0,0,0.7)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#fff',
+                        borderWidth: 1,
+                      },
+                      datalabels: {
+                        display: true,
+                        color: 'white',
+                        anchor: 'end',         // se ancorează la capătul barei
+                        align: 'top',          // eticheta apare deasupra barei
+                        offset: 6,             // spațiu între bară și etichetă
+                        font: {
+                          size: 13,
+                          weight: 'bold'
+                        },
+                        formatter: function (value: number) {
+                          const hours = Math.floor(value / 60);
+                          const minutes = Math.round(value % 60);
+                          return `${hours}h ${minutes}m`;
+                        }
+                      }
+                      
+                      
+                    },
                     scales: {
                       y: {
                         beginAtZero: true,
-                        ticks: { color: '#fff' },
-                        title: { display: true, text: 'Minutes', color: '#fff' }
+                        ticks: {
+                          color: '#fff',
+                          callback: function (value: number) {
+                            return `${value}m`;
+                          }
+                        },
+                        title: {
+                          display: true,
+                          text: 'Minutes',
+                          color: '#fff'
+                        }
                       },
-                      x: { ticks: { color: '#fff' } }
+                      x: {
+                        ticks: { color: '#fff' }
+                      }
                     },
-                    plugins: { legend: { labels: { color: '#fff' } } }
+                    layout: {
+                      padding: { top: 20, bottom: 10 }
+                    }
                   }}
+                  
                 />
               </ChartWrapper>
             ) : (
@@ -614,6 +967,24 @@ const TeamCharts = () => {
                   options={{
                     responsive: true,
                     maintainAspectRatio: false,
+                    onClick: (_, elements) => {
+                      console.log("Clicked bar elements:", elements);
+                    
+                      if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const label = volumeDataset.labels[index];
+                    
+                        console.log("Clicked label:", label); 
+                    
+                        if (label) {
+                          const [teamName, status] = label.split(' - ');
+                          const capitalizedStatus = status.charAt(0).toUpperCase() + status.slice(1);
+                    
+                          console.log("Drill into:", teamName, capitalizedStatus);
+                          handleDrillClick(teamName, capitalizedStatus, 'ticketStatus');
+                        }
+                      }
+                    },                    
                     scales: {
                       y: {
                         beginAtZero: true,
@@ -635,28 +1006,39 @@ const TeamCharts = () => {
                       legend: { display: false },
                       tooltip: {
                         callbacks: {
-                          title: (tooltipItems) => {
-                            return tooltipItems[0].label;
-                          },
-                          label: (context) => {
-                            return `Count: ${context.parsed.y}`;
-                          }
-                        }
+                          title: (tooltipItems) => tooltipItems[0].label,
+                          label: (context) => `Count: ${context.parsed.y}`,
+                        },
                       },
-                      // @ts-ignore because customLabels is a custom option
                       customLabels: {
                         teamNames: teamNamesForCustomLabel,
                         statusCount: statusOrder.length,
                       },
-                    },
+                      datalabels: {
+                        color: 'white',
+                        anchor: 'center',
+                        align: 'center',
+                        font: {
+                          weight: 'bold',
+                          size: 11
+                        },
+                        formatter: (value: number) => value > 0 ? value : ''
+                      }
+                    }
+                    ,
                   }}
                 />
+
               </ChartWrapper>
             ) : (
               <NoDataMessage>No volume by status data available for teams.</NoDataMessage>
             )}
           </Card>
         </ChartSection>
+        {showDrillModal && drillData && (
+          <TeamDrillModal data={drillData} onClose={() => setShowDrillModal(false)} />
+        )}
+
       </Content>
     </Wrapper>
   );
