@@ -4,6 +4,7 @@ import styled, {keyframes} from 'styled-components';
 import { useEffect } from 'react';
 import React, {useState} from 'react';
 import { useRouter } from 'next/navigation';
+import { useLoading } from '../context/LoadingContext';
 
 const Container = styled.div`
   display: flex;
@@ -134,12 +135,18 @@ const Links = styled.div`
   }
 `;
 
-const LoginForm: React.FC = () => {
+const ErrorMessage = styled.p`
+  color: red;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+`;
 
+const LoginForm: React.FC = () => {
+  const router = useRouter();
+  const { setLoading } = useLoading();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const router = useRouter();
 
   useEffect(() => {
     fetch('http://localhost:8080/api/check-auth', {
@@ -147,32 +154,37 @@ const LoginForm: React.FC = () => {
     })
       .then(res => {
         if (res.ok) {
-          router.push('/dashboard'); // Already logged in
+          router.push('/dashboard');
         }
       });
   }, []);
 
-  // Handle login form submission
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    
+    try {
+      const res = await fetch('http://localhost:8080/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+        credentials: 'include',
+      });
 
-    // Send POST request to the Express backend
-    const response = await fetch('http://localhost:8080/api/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username: username, password: password }),
-      credentials: 'include'
-    });
+      const data = await res.json();
 
-    const data = await response.json();
-
-    if (response.status === 200) {
-      // Redirect user on successful login
-      router.push('/dashboard'); // Redirect to the dashboard or other page
-    } else {
-      setError(data.message); // Display error message from the backend
+      if (res.ok) {
+        setLoading(true); // Show loading
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setLoading(false); // Hide loading after 1 second
+        router.push('/dashboard');
+      } else {
+        setError(data.message || 'Login failed');
+      }
+    } catch (err) {
+      setError('Failed to connect to server');
     }
   };
 
@@ -180,14 +192,14 @@ const LoginForm: React.FC = () => {
     <Container>
       <FormWrapper>
         <Title>Login</Title>
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleSubmit}>
           <Input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
           <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           <Button type="submit">Login</Button>
+          {error && <ErrorMessage>{error}</ErrorMessage>}
         </form>
         <Links>
-          <a href="/login/forgot-password">Forgot Password?</a> | {' '}
-          <a href="/register">Register</a>
+          <a href="/login/forgot-password">Forgot Password?</a>
         </Links>
       </FormWrapper>
     </Container>
