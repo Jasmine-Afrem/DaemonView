@@ -25,6 +25,7 @@ import {
   FiServer,
   FiSettings,
   FiHelpCircle,
+  FiShield
 } from 'react-icons/fi';
 import '../globals.css';
 import EditTicketModal from './components/EditModal';
@@ -76,11 +77,7 @@ const DaemonView = () => {
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
     { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
     { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
-    { icon: <FiAlertCircle />, label: 'Alerts' },
-    { icon: <FiClock />, label: 'History' },
-    { icon: <FiServer />, label: 'Servers' },
-    { icon: <FiSettings />, label: 'Settings' },
-    { icon: <FiHelpCircle />, label: 'Help' },
+    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator')},
   ];
 
   useEffect(() => {
@@ -1002,15 +999,13 @@ const redGlow = keyframes`
   }
 `;
 
-
 const ProfileIcon = styled(FiUser)`
   cursor: pointer;
   transition: 0.3s ease;
   font-size: 20px;
-
   &:hover {
-    color: #635bff;
-    animation: ${glow} 2s ease-in-out infinite;
+    color:rgb(134, 129, 240);
+    transform: scale(1.1);
   }
 `;
 
@@ -1018,10 +1013,9 @@ const LogoutIcon = styled(FiLogOut)`
   cursor: pointer;
   transition: 0.3s ease;
   font-size: 20px;
-
   &:hover {
     color: #ff5b5b;
-    animation: ${redGlow} 2s ease-in-out infinite;
+    transform: scale(1.1);
   }
 `;
 

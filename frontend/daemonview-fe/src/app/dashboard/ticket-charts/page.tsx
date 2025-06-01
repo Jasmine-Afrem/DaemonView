@@ -9,13 +9,14 @@ import {
   FiClock, FiServer, FiSettings, FiRefreshCcw, FiHelpCircle, FiMenu, FiX,
   FiFilter, FiDownload
 } from 'react-icons/fi';
-import { Bar, Doughnut, getElementAtEvent } from 'react-chartjs-2';
+import { Bar, Doughnut, getElementAtEvent, Line } from 'react-chartjs-2';
 import {
   FiLogOut,
   FiUser,
   FiUsers,
   FiGrid,
   FiTag,
+  FiShield
 } from 'react-icons/fi';
 
 import {
@@ -28,7 +29,7 @@ import {
   ArcElement,
   Tooltip,
   Legend,
-  ChartType, // Keep ChartType if used, otherwise can be removed
+  ChartType,
 } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 
@@ -86,6 +87,19 @@ interface DrillDownTicket {
   relatedIncidents?: string;
   relatedDevices?: string;
   notes?: string;
+}
+
+// Add this with other interfaces at the top
+interface TicketsOverTimeData {
+  labels: string[];
+  datasets: {
+    label: string;
+    data: number[];
+    borderColor: string;
+    backgroundColor: string;
+    tension: number;
+    fill: boolean;
+  }[];
 }
 
 const mockDrillDownTickets: DrillDownTicket[] = [
@@ -305,6 +319,48 @@ const TicketCharts = () => {
   const [avgResTimeInMinutes, setAvgResTimeInMinutes] = useState(0);
   const MAX_RESOLUTION_TIME_MINUTES = 8 * 60; // Example: 8 hours
 
+  // Add this with other state declarations
+  const [ticketsOverTime, setTicketsOverTime] = useState<TicketsOverTimeData>({
+    labels: [],
+    datasets: [
+      {
+        label: 'Open',
+        data: [] as number[],
+        borderColor: '#ff6b6b',
+        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+        tension: 0.4,
+        fill: true
+      },
+      {
+        label: 'In Progress',
+        data: [] as number[],
+        borderColor: '#4dabf7',
+        backgroundColor: 'rgba(77, 171, 247, 0.1)',
+        tension: 0.4,
+        fill: true
+      },
+      {
+        label: 'Resolved',
+        data: [] as number[],
+        borderColor: '#51cf66',
+        backgroundColor: 'rgba(81, 207, 102, 0.1)',
+        tension: 0.4,
+        fill: true
+      },
+      {
+        label: 'Closed',
+        data: [] as number[],
+        borderColor: '#cc5de8',
+        backgroundColor: 'rgba(204, 93, 232, 0.1)',
+        tension: 0.4,
+        fill: true
+      }
+    ]
+  });
+
+  // Add this with other state declarations
+  const ticketsOverTimeChartRef = useRef<ChartJS<'line', number[], string> | null>(null);
+
   const timeStringToMinutes = (timeStr: string | null | undefined): number => {
     if (!timeStr) return 0;
     const parts = timeStr.split(':');
@@ -452,6 +508,51 @@ const TicketCharts = () => {
     }
   };
 
+  // Update the fetchTicketsOverTime function
+  const fetchTicketsOverTime = async () => {
+    // Mock data showing realistic trends
+    const mockData = {
+      labels: ['Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025', 'Apr 2025', 'May 2025'],
+      datasets: [
+        {
+          label: 'Open',
+          data: [15, 18, 12, 20, 15, 17],
+          borderColor: '#ff6b6b',
+          backgroundColor: 'rgba(255, 107, 107, 0.1)',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: 'In Progress',
+          data: [10, 13, 15, 12, 14, 11],
+          borderColor: '#4dabf7',
+          backgroundColor: 'rgba(77, 171, 247, 0.1)',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: 'Resolved',
+          data: [8, 12, 14, 16, 13, 15],
+          borderColor: '#51cf66',
+          backgroundColor: 'rgba(81, 207, 102, 0.1)',
+          tension: 0.4,
+          fill: true
+        },
+        {
+          label: 'Closed',
+          data: [5, 8, 10, 7, 12, 9],
+          borderColor: '#cc5de8',
+          backgroundColor: 'rgba(204, 93, 232, 0.1)',
+          tension: 0.4,
+          fill: true
+        }
+      ]
+    };
+
+    setTicketsOverTime(mockData);
+  };
+
+  // Add fetchTicketsOverTime to refreshAllChartData
   const refreshAllChartData = async () => {
     setLoading(true);
     try {
@@ -459,10 +560,10 @@ const TicketCharts = () => {
         fetchTicketsByStatus(),
         fetchResolvedTickets(),
         fetchSLACompliance(),
-        fetchAvgResolutionTime()
+        fetchAvgResolutionTime(),
+        fetchTicketsOverTime()
       ]);
     } catch (error) {
-      // Individual fetches already log their errors.
       console.error("TicketCharts: Error in refreshAllChartData Promise.all:", error);
     } finally {
       setLoading(false);
@@ -543,9 +644,7 @@ const TicketCharts = () => {
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
     { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
     { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
-    { icon: <FiAlertCircle />, label: 'Alerts' }, { icon: <FiClock />, label: 'History' },
-    { icon: <FiServer />, label: 'Servers' }, { icon: <FiSettings />, label: 'Settings' },
-    { icon: <FiHelpCircle />, label: 'Help' }
+    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator')},
   ];
 
   const barData = {
@@ -712,6 +811,28 @@ const TicketCharts = () => {
 
   const getGlobalFiltersForDrilldown = () => ({ startDate: filterStartDate, endDate: filterEndDate, priority: filterPriority === 'All' ? undefined : filterPriority, });
 
+  // Add this with other chart click handlers
+  const handleTicketsOverTimeClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!ticketsOverTimeChartRef.current) return;
+    
+    const elements = getElementAtEvent(ticketsOverTimeChartRef.current, event);
+    if (elements.length > 0) {
+      const { datasetIndex, index } = elements[0];
+      const status = ticketsOverTime.datasets[datasetIndex].label;
+      const month = ticketsOverTime.labels[index];
+      const value = ticketsOverTime.datasets[datasetIndex].data[index];
+      
+      const title = `${status} Tickets - ${month} (${value})`;
+      const fetchCriteria = {
+        type: 'ticketStatus',
+        status,
+        ...getGlobalFiltersForDrilldown()
+      };
+      
+      openDrillDownModal(title, fetchCriteria);
+    }
+  };
+
   return (
     <Wrapper>
       <Sidebar $isOpen={sidebarOpen}>
@@ -828,6 +949,87 @@ const TicketCharts = () => {
               ) : (<NoDataMessage>No SLA data available.</NoDataMessage>)}
           </Card>
         </ChartSection>
+
+        <FullWidthCard>
+          <CardTitle><FiBarChart2 /> Tickets Over Time</CardTitle>
+          <div style={{ position: 'relative', height: 'calc(100% - 40px)' }}>
+            {loading ? (
+              <NoDataMessage>Loading chart...</NoDataMessage>
+            ) : ticketsOverTime.labels.length > 0 ? (
+              <Line
+                ref={ticketsOverTimeChartRef}
+                data={ticketsOverTime}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'top',
+                      labels: {
+                        color: '#e0e0e0',
+                        font: {
+                          family: "'Orbitron', sans-serif",
+                          size: 12
+                        },
+                        padding: 15
+                      }
+                    },
+                    datalabels: {
+                      display: false
+                    }
+                  },
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                      },
+                      ticks: {
+                        color: '#e0e0e0',
+                        font: {
+                          family: "'Orbitron', sans-serif",
+                          size: 12
+                        },
+                        padding: 10,
+                        stepSize: 1
+                      }
+                    },
+                    x: {
+                      grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                      },
+                      ticks: {
+                        color: '#e0e0e0',
+                        font: {
+                          family: "'Orbitron', sans-serif",
+                          size: 12
+                        },
+                        padding: 10
+                      }
+                    }
+                  },
+                  interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: true
+                  },
+                  elements: {
+                    point: {
+                      radius: 4,
+                      hoverRadius: 6
+                    },
+                    line: {
+                      borderWidth: 2
+                    }
+                  }
+                }}
+                onClick={handleTicketsOverTimeClick}
+              />
+            ) : (
+              <NoDataMessage>No data available for tickets over time.</NoDataMessage>
+            )}
+          </div>
+        </FullWidthCard>
       </Content>
 
       {isDrillDownModalOpen && (
@@ -853,7 +1055,7 @@ const TicketCharts = () => {
                     <tbody>
                       {drillDownTickets.map((ticket) => (
                         <tr key={ticket.id}>
-                          <td>{`${ticket.id}`}</td><td>{ticket.description}</td><td>{ticket.status}</td><td><PriorityPill priority={ticket.priority}>{ticket.priority}</PriorityPill></td><td>{ticket.createdAt}</td><td>{ticket.updatedAt}</td><td>{ticket.submittedBy}</td><td>{ticket.assignedTo}</td><td>{ticket.closeDate || 'N/A'}</td><td>{ticket.resolveDate || 'N/A'}</td><td>{ticket.slaHours}</td><td>{ticket.deadline}</td><td><WithinSLAPill $within={ticket.withinSla && ticket.withinSla.toLowerCase() === 'yes'}>{ticket.withinSla}</WithinSLAPill></td>
+                          <td>{`${ticket.id}`}</td><td>{ticket.description}</td><td>{ticket.status}</td><td><PriorityPill priority={ticket.priority}>{ticket.priority}</PriorityPill></td><td>{ticket.createdAt}</td><td>{ticket.updatedAt}</td><td>{ticket.submittedBy}</td><td>{ticket.assignedTo}</td><td>{ticket.closeDate || 'N/A'}</td><td>{ticket.resolveDate || 'N/A'}</td><td>{ticket.slaHours}</td><td>{ticket.deadline}</td><td><WithinSLAPill $within={ticket.withinSla === 'Yes' || ticket.withinSla === 'yes'}>{ticket.withinSla}</WithinSLAPill></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1267,9 +1469,7 @@ const TableActions = styled.button`
   border: none; /* Remove default border */
   cursor: pointer;
   transition: 0.3s ease;
-  /* position: relative; */ /* Removed as it might not be needed */
-  /* overflow: hidden; */ /* Removed as it might not be needed */
-  /* margin-right: 2.4rem; */ /* Adjusted margin if needed or remove */
+  margin-right: 1rem;
 
   &:hover {
     background: #635bff;
@@ -1552,10 +1752,9 @@ const ProfileIcon = styled(FiUser)`
   cursor: pointer;
   transition: 0.3s ease;
   font-size: 20px;
-
   &:hover {
-    color: #635bff;
-    animation: ${glow} 2s ease-in-out infinite;
+    color:rgb(134, 129, 240);
+    transform: scale(1.1);
   }
 `;
 
@@ -1563,10 +1762,9 @@ const LogoutIcon = styled(FiLogOut)`
   cursor: pointer;
   transition: 0.3s ease;
   font-size: 20px;
-
   &:hover {
     color: #ff5b5b;
-    animation: ${redGlow} 2s ease-in-out infinite;
+    transform: scale(1.1);
   }
 `;
 
@@ -1642,8 +1840,6 @@ const StyledParagraph2 = styled.p`
 
 const StyledParagraph = styled.p`
   font-size: 24px; /* Adjusted size */
-  /* margin-top: 8rem; */ /* Removed fixed margin */
-  /* margin-left: 35%; */ /* Removed fixed margin */
   position: relative;
   display: flex;
   align-items: center;
@@ -1657,8 +1853,7 @@ const StyledParagraph = styled.p`
   background: linear-gradient(45deg,rgb(167, 130, 226),rgb(128, 60, 218));
   padding: 15px 25px; /* Adjusted padding */
   border-radius: 100px;
-  /* width: 13rem; */ /* Removed fixed width, let content define it */
-  min-width: 150px; /* Ensure a minimum width */
+  min-width: 150px; 
   
   box-shadow: 0px 0px 15px 10px rgba(184, 132, 226, 0.2);
   
@@ -1672,7 +1867,7 @@ const RefreshButton = styled.button`
   border: none;
   padding: 8px 14px;
   border-radius: 10px;
-  margin-left: 1rem; /* Adjusted from 2.5rem */
+  margin-left: 0.4rem;
   font-size: 14px;
   font-weight: bold;
   cursor: pointer;
@@ -1680,10 +1875,8 @@ const RefreshButton = styled.button`
   display: flex;
   align-items: center;
   gap: 6px;
-  /* width: 7%; */ /* Removed fixed percentage width */
   min-width: 120px; /* Set a min-width */
   margin-bottom: 1rem;
-  /* transition: background-color 0.2s ease, box-shadow 0.2s ease; */ /* Already in all */
 
   &:hover:not(:disabled) {
     background-color: #4e46d4;
@@ -1705,4 +1898,14 @@ const FilterControls = styled.div`
   position: relative;
   flex-grow: 1; /* Allow FilterControls to take space */
   justify-content: flex-end; /* Push content (tags and icon) to the right */
+`;
+
+const FullWidthCard = styled.div`
+  background-color: rgba(19, 18, 48, 0.85);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  margin: 20px;
+  height: 400px;
+  width: calc(100% - 40px);
 `;

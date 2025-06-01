@@ -20,7 +20,8 @@ import {
   FiUser,
   FiUsers,
   FiGrid,
-  FiTag
+  FiTag,
+  FiShield
 } from 'react-icons/fi';
 import TeamDrillModal from '../components/TeamDrillModal';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
@@ -543,11 +544,7 @@ const TeamCharts = () => {
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
     { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
     { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
-    { icon: <FiAlertCircle />, label: 'Alerts' },
-    { icon: <FiClock />, label: 'History' },
-    { icon: <FiServer />, label: 'Servers' },
-    { icon: <FiSettings />, label: 'Settings' },
-    { icon: <FiHelpCircle />, label: 'Help' }
+    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator')},
   ];
   const statusTeams = Array.from(new Set(statusStats.map((s: StatusEntry) => s.team_name)));
   const statusOrder = ['open', 'in_progress', 'resolved', 'closed'];
@@ -1183,10 +1180,9 @@ const ProfileIcon = styled(FiUser)`
   cursor: pointer;
   transition: 0.3s ease;
   font-size: 20px;
-
   &:hover {
-    color: #635bff;
-    animation: ${glow} 2s ease-in-out infinite;
+    color:rgb(134, 129, 240);
+    transform: scale(1.1);
   }
 `;
 
@@ -1194,10 +1190,9 @@ const LogoutIcon = styled(FiLogOut)`
   cursor: pointer;
   transition: 0.3s ease;
   font-size: 20px;
-
   &:hover {
     color: #ff5b5b;
-    animation: ${redGlow} 2s ease-in-out infinite;
+    transform: scale(1.1);
   }
 `;
 

@@ -86,12 +86,10 @@ const ProfilePage = () => {
   return (
     <Container>
       <Header>
-        <Link href="/dashboard">
-          <Back>
-            <FiArrowLeft />
-            Dashboard
-          </Back>
-        </Link>
+        <Back onClick={() => window.history.back()}>
+          <FiArrowLeft />
+          Back
+        </Back>
         <PageTitle>Profile</PageTitle>
       </Header>
 
@@ -152,8 +150,6 @@ const ProfilePage = () => {
   );
 };
 
-// === STYLED COMPONENTS ===
-
 const Container = styled.div`
   position: relative;
   min-height: 100vh;
@@ -187,17 +183,22 @@ const Header = styled.div`
   align-items: center;
 `;
 
-const Back = styled.div`
+const Back = styled.button`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8px; 
   color: #635bff;
   cursor: pointer;
   font-weight: bold;
   transition: all 0.2s ease;
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.4rem;  
 
   &:hover {
-    opacity: 1;
+    opacity: 1; 
     transform: scale(1.05);
     text-shadow: 0 0 6px rgba(140, 135, 247, 0.5);
   }
