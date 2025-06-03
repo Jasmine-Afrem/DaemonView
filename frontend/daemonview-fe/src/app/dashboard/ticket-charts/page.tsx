@@ -89,7 +89,7 @@ interface DrillDownTicket {
   notes?: string;
 }
 
-// Add this with other interfaces at the top
+// Interface for the "Tickets Created Over Time" chart data structure
 interface TicketsOverTimeData {
   labels: string[];
   datasets: {
@@ -133,10 +133,10 @@ const mapApiTicketToDrillDownTicket = (apiTicket: any): DrillDownTicket => {
   let withinSlaStatus: string;
   if (typeof apiTicket['Within SLA'] === 'number') {
     withinSlaStatus = apiTicket['Within SLA'] === 1 ? 'Yes' : 'No';
-  } else if (apiTicket['SLA Status']) { // Check for an alternative field if 'Within SLA' is not a number
+  } else if (apiTicket['SLA Status']) { 
     withinSlaStatus = apiTicket['SLA Status'].toLowerCase() === 'compliant' ? 'Yes' : 'No';
   } else {
-    withinSlaStatus = 'Pending'; // Default if status cannot be determined
+    withinSlaStatus = 'Pending'; 
   }
 
   return {
@@ -149,13 +149,13 @@ const mapApiTicketToDrillDownTicket = (apiTicket: any): DrillDownTicket => {
     submittedBy: apiTicket['Submitted By'] || apiTicket.submittedBy || 'N/A',
     assignedTo: apiTicket['Assigned To'] || apiTicket.assignedTo || 'N/A',
     closeDate: formatDateTime(apiTicket['Close Date'] || apiTicket.closeDate),
-    resolveDate: formatDateTime(apiTicket['Completed Date'] || apiTicket.resolveDate), // API example uses "Completed Date"
+    resolveDate: formatDateTime(apiTicket['Completed Date'] || apiTicket['Resolved At'] || apiTicket.resolveDate),
     slaHours: String(apiTicket['SLA (Hours)'] || apiTicket.slaHours || 'N/A'),
     deadline: formatDateTime(apiTicket['Deadline'] || apiTicket.deadline) || 'N/A',
     withinSla: withinSlaStatus,
     relatedIncidents: apiTicket['Related Incidents'] || apiTicket.relatedIncidents,
     relatedDevices: apiTicket['Related Devices'] || apiTicket.relatedDevices,
-    notes: apiTicket['Notes'] || apiTicket.notes, // Assuming 'Notes' might exist
+    notes: apiTicket['Notes'] || apiTicket.notes, 
   };
 };
 
@@ -171,7 +171,7 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
   }
 
   let apiUrl = '';
-  let callApi = false; // Flag to determine if we should proceed with an API call
+  let callApi = false;
 
   if (criteria.type === 'slaStatus') {
     apiUrl = `http://localhost:8080/api/sla-compliance-tickets`;
@@ -196,9 +196,7 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
       queryParams.append('resolved', 'no');
       callApi = true;
     } else {
-      // This means the label from the chart was not 'Resolved' or 'Unresolved'
       console.warn("[DEBUG FRONTEND] resolvedStatus: Unknown criteria.status for API call:", criteria.status);
-      // callApi will remain false, leading to mock data path
     }
   } else if (criteria.type === 'ticketStatus') {
     apiUrl = `http://localhost:8080/api/tickets-by-status-tickets`;
@@ -207,6 +205,16 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
       callApi = true;
     } else {
       console.warn("[DEBUG FRONTEND] ticketStatus: Missing or invalid criteria.status:", criteria.status);
+    }
+  } else if (criteria.type === 'monthlyCreatedTickets') {
+    apiUrl = `http://localhost:8080/api/monthly-ticket-counts-tickets`;
+    if (criteria.year && criteria.month) {
+      const formattedMonth = String(criteria.month).padStart(2, '0'); // e.g., 2 becomes "02"
+      const yearMonthValue = `${criteria.year}-${formattedMonth}`;   // Format: YYYY-MM
+      queryParams.append('p_year_month', yearMonthValue);          // Use p_year_month=YYYY-MM
+      callApi = true;
+    } else {
+      console.warn("[DEBUG FRONTEND] monthlyCreatedTickets: Missing year or month for p_year_month formatting:", criteria);
     }
   } else {
     console.warn("[DEBUG FRONTEND] Unknown criteria.type, cannot determine API endpoint:", criteria.type);
@@ -217,12 +225,11 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
   if (callApi && apiUrl) {
     try {
       const fullApiUrl = `${apiUrl}?${queryParams.toString()}`;
-      console.log(`[DEBUG FRONTEND] Fetching drill-down from: ${fullApiUrl}`);
+      console.log(`[DEBUG FRONTEND] Fetching drill-down from: ${fullApiUrl}`); // This log will now show the correct query param
       const response = await fetch(fullApiUrl, { method: 'GET', credentials: 'include' });
 
       console.log(`[DEBUG FRONTEND] API Response Status for ${criteria.type}:`, response.status);
-      const responseText = await response.text(); // Get raw text first
-      // Log only a snippet if responseText is very long to avoid cluttering console too much
+      const responseText = await response.text();
       const logResponseText = responseText.length > 500 ? responseText.substring(0, 500) + "..." : responseText;
       console.log(`[DEBUG FRONTEND] Raw API Response Text for ${criteria.type}:`, logResponseText);
 
@@ -233,52 +240,61 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
       
       let apiTickets;
       try {
-          apiTickets = JSON.parse(responseText); // Manually parse the text
+          apiTickets = JSON.parse(responseText);
       } catch (parseError) {
           console.error(`[DEBUG FRONTEND] Failed to parse JSON response for ${criteria.type}:`, parseError, "Response text was:", responseText);
-          return []; // Return empty array if JSON parsing fails
+          return [];
       }
 
       console.log(`[DEBUG FRONTEND] Parsed API Tickets (apiTickets) for ${criteria.type}:`, apiTickets);
       console.log(`[DEBUG FRONTEND] Is apiTickets an array for ${criteria.type}?`, Array.isArray(apiTickets));
 
       if (Array.isArray(apiTickets)) {
-        const mappedTickets = apiTickets.map(mapApiTicketToDrillDownTicket); // Ensure mapApiTicketToDrillDownTicket is robust
+        const mappedTickets = apiTickets.map(mapApiTicketToDrillDownTicket);
         console.log(`[DEBUG FRONTEND] Mapped tickets for ${criteria.type} (count: ${mappedTickets.length}):`, mappedTickets.length > 0 ? mappedTickets[0] : 'No tickets mapped (empty array received or after mapping)');
         return mappedTickets;
       } else {
         console.error(`[DEBUG FRONTEND] Drill-down API for ${criteria.type} did NOT return an array. Actual (parsed) response:`, apiTickets);
-        return []; // Return empty if not an array
+        return [];
       }
     } catch (error) {
-      // This will catch network errors, parsing errors if thrown, or errors from new Error()
       console.error(`[DEBUG FRONTEND] Catch block error in fetchDrillDownData for ${criteria.type}:`, error);
-      return []; // Return empty array on any error during fetch/processing
+      return [];
     }
   } else {
-    // Fallback to mock data if API call is not made (callApi is false or apiUrl is empty)
     console.warn(`[DEBUG FRONTEND] Fallback: API call NOT made for type "${criteria.type}". callApi: ${callApi}, apiUrl: "${apiUrl}". Using mock data path.`);
-    await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Basic mock data filtering
     let filteredMockTickets = [...mockDrillDownTickets];
     
     if (criteria.priority && typeof criteria.priority === 'string' && criteria.priority.toLowerCase() !== 'all') {
         filteredMockTickets = filteredMockTickets.filter(t => t.priority && typeof t.priority === 'string' && t.priority.toLowerCase() === criteria.priority.toLowerCase());
     }
-    // Add more specific mock filters if needed for testing the UI with mock data
     if (criteria.type === 'resolvedStatus') {
         if (criteria.status === 'Resolved') {
             filteredMockTickets = filteredMockTickets.filter(t => t.status && (t.status.toLowerCase() === 'resolved' || t.status.toLowerCase() === 'closed'));
-        } else if (criteria.status === 'Unresolved') { // Assuming "Unresolved" means not "Resolved" or "Closed" for mock data
+        } else if (criteria.status === 'Unresolved') {
             filteredMockTickets = filteredMockTickets.filter(t => t.status && !(t.status.toLowerCase() === 'resolved' || t.status.toLowerCase() === 'closed'));
         }
     }
-    // You can add similar mock filters for criteria.type === 'slaStatus' and criteria.type === 'ticketStatus'
+    if (criteria.type === 'monthlyCreatedTickets' && criteria.year && criteria.month) {
+        filteredMockTickets = filteredMockTickets.filter(t => {
+            try {
+                const createdDate = new Date(t.createdAt);
+                return createdDate.getFullYear() === criteria.year && (createdDate.getMonth() + 1) === criteria.month;
+            } catch (e) { return false; }
+        });
+    }
 
     console.log(`[DEBUG FRONTEND] Fallback: Returning ${filteredMockTickets.length} mock tickets after filtering.`);
     return Promise.resolve(filteredMockTickets.slice(0, 50).map(mapApiTicketToDrillDownTicket));
   }
+};
+
+const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const monthNameToNumber: { [key: string]: number } = {
+  "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+  "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12
 };
 
 const TicketCharts = () => {
@@ -317,64 +333,35 @@ const TicketCharts = () => {
   const ticketsByStatusChartRef = useRef<ChartJS<'doughnut', number[], string> | null>(null);
 
   const [avgResTimeInMinutes, setAvgResTimeInMinutes] = useState(0);
-  const MAX_RESOLUTION_TIME_MINUTES = 8 * 60; // Example: 8 hours
+  const MAX_RESOLUTION_TIME_MINUTES = 8 * 60; 
 
-  // Add this with other state declarations
   const [ticketsOverTime, setTicketsOverTime] = useState<TicketsOverTimeData>({
     labels: [],
     datasets: [
       {
-        label: 'Open',
+        label: 'Tickets Created',
         data: [] as number[],
-        borderColor: '#ff6b6b',
-        backgroundColor: 'rgba(255, 107, 107, 0.1)',
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'In Progress',
-        data: [] as number[],
-        borderColor: '#4dabf7',
-        backgroundColor: 'rgba(77, 171, 247, 0.1)',
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'Resolved',
-        data: [] as number[],
-        borderColor: '#51cf66',
-        backgroundColor: 'rgba(81, 207, 102, 0.1)',
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'Closed',
-        data: [] as number[],
-        borderColor: '#cc5de8',
-        backgroundColor: 'rgba(204, 93, 232, 0.1)',
+        borderColor: '#4CAF50', 
+        backgroundColor: 'rgba(76, 175, 80, 0.2)',
         tension: 0.4,
         fill: true
       }
     ]
   });
-
-  // Add this with other state declarations
   const ticketsOverTimeChartRef = useRef<ChartJS<'line', number[], string> | null>(null);
 
   const timeStringToMinutes = (timeStr: string | null | undefined): number => {
     if (!timeStr) return 0;
     const parts = timeStr.split(':');
-    if (parts.length === 3) { // HH:MM:SS
+    if (parts.length === 3) { 
       const [h, m, s] = parts.map(Number);
       if (isNaN(h) || isNaN(m) || isNaN(s)) return 0;
       return (h * 60) + m + (s / 60);
-    } else if (parts.length === 2) { // MM:SS or HH:MM (less common for resolution time)
-      // Assuming MM:SS format, or if first part > 59, treat as HH:MM
+    } else if (parts.length === 2) { 
       const [p1, p2] = parts.map(Number);
       if (isNaN(p1) || isNaN(p2)) return 0;
-      // Heuristic: if p1 (minutes or hours) > 59, it's likely hours.
       return p1 > 59 ? (p1 * 60) + p2 : p1 + (p2 / 60) ; 
-    } else if (parts.length === 1 && !isNaN(Number(timeStr))) { // Just minutes
+    } else if (parts.length === 1 && !isNaN(Number(timeStr))) { 
         return Number(timeStr);
     }
     console.warn("Could not parse time string:", timeStr);
@@ -415,7 +402,7 @@ const TicketCharts = () => {
       'Submitted By': t.submittedBy,
       'Assigned To': t.assignedTo,
       'Close Date': t.closeDate || '',
-      'Resolved Date': t.resolveDate || '', // Corrected from 'resolveDate' to 'Resolved Date' for header
+      'Resolved Date': t.resolveDate || '',
       'SLA Hours': t.slaHours,
       'Deadline': t.deadline,
       'Within SLA': t.withinSla,
@@ -427,14 +414,11 @@ const TicketCharts = () => {
     const worksheet = XLSX.utils.json_to_sheet(worksheetData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Tickets');
-
-    // Sanitize title for filename
     let fileNameBase = 'DrillDown_Tickets';
     if (drillDownTitle) {
       fileNameBase = drillDownTitle.replace(/[^a-z0-9_]/gi, '_').replace(/_{2,}/g, '_');
     }
     const fileName = `${fileNameBase}.xlsx`;
-
     XLSX.writeFile(workbook, fileName); 
   };
   
@@ -460,7 +444,7 @@ const TicketCharts = () => {
     try {
       const res = await fetch(`http://localhost:8080/api/tickets-resolved${queryString ? `?${queryString}` : ''}`, { credentials: 'include' });
       if (res.ok) {
-        const data = await res.json(); // Assuming this returns ResolvedTicketStats[]
+        const data = await res.json();
         setResolvedTickets(data);
       } else {
         console.error('Failed to fetch resolved tickets:', await res.text());
@@ -477,7 +461,7 @@ const TicketCharts = () => {
     try {
       const res = await fetch(`http://localhost:8080/api/sla-compliance${queryString ? `?${queryString}` : ''}`, { credentials: 'include' });
       if (res.ok) {
-        const data = await res.json(); // Assuming this returns SlaCompliance[]
+        const data = await res.json(); 
         setSlaComplianceData(data);
       } else {
         console.error('Failed to fetch SLA data:', await res.text());
@@ -495,7 +479,6 @@ const TicketCharts = () => {
       const res = await fetch(`http://localhost:8080/api/resolution-time${queryString ? `?${queryString}` : ''}`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        // Assuming data is [{ average_resolution_time_in_time_format: "HH:MM:SS" }]
         const resolutionTime = data[0]?.average_resolution_time_in_time_format;
         setAverageResolutionTime(resolutionTime);
       } else {
@@ -508,51 +491,80 @@ const TicketCharts = () => {
     }
   };
 
-  // Update the fetchTicketsOverTime function
   const fetchTicketsOverTime = async () => {
-    // Mock data showing realistic trends
-    const mockData = {
-      labels: ['Dec 2024', 'Jan 2025', 'Feb 2025', 'Mar 2025', 'Apr 2025', 'May 2025'],
-      datasets: [
-        {
-          label: 'Open',
-          data: [15, 18, 12, 20, 15, 17],
-          borderColor: '#ff6b6b',
-          backgroundColor: 'rgba(255, 107, 107, 0.1)',
-          tension: 0.4,
-          fill: true
-        },
-        {
-          label: 'In Progress',
-          data: [10, 13, 15, 12, 14, 11],
-          borderColor: '#4dabf7',
-          backgroundColor: 'rgba(77, 171, 247, 0.1)',
-          tension: 0.4,
-          fill: true
-        },
-        {
-          label: 'Resolved',
-          data: [8, 12, 14, 16, 13, 15],
-          borderColor: '#51cf66',
-          backgroundColor: 'rgba(81, 207, 102, 0.1)',
-          tension: 0.4,
-          fill: true
-        },
-        {
-          label: 'Closed',
-          data: [5, 8, 10, 7, 12, 9],
-          borderColor: '#cc5de8',
-          backgroundColor: 'rgba(204, 93, 232, 0.1)',
-          tension: 0.4,
-          fill: true
-        }
-      ]
-    };
+    const queryString = buildChartApiQueryString(); 
+    try {
+      const res = await fetch(`http://localhost:8080/api/monthly-ticket-counts${queryString ? `?${queryString}` : ''}`, { credentials: 'include' });
+      if (res.ok) {
+        const apiData: { ticket_year: number; ticket_month: number; ticket_count: number }[] = await res.json();
 
-    setTicketsOverTime(mockData);
+        if (apiData && apiData.length > 0) {
+          apiData.sort((a, b) => {
+            if (a.ticket_year !== b.ticket_year) {
+              return a.ticket_year - b.ticket_year;
+            }
+            return a.ticket_month - b.ticket_month;
+          });
+
+          const labels = apiData.map(item => `${monthNames[item.ticket_month - 1]} ${item.ticket_year}`);
+          const counts = apiData.map(item => item.ticket_count);
+
+          setTicketsOverTime({
+            labels: labels,
+            datasets: [
+              {
+                label: 'Tickets Created',
+                data: counts,
+                borderColor: '#4CAF50', 
+                backgroundColor: 'rgba(76, 175, 80, 0.2)',
+                tension: 0.4,
+                fill: true,
+              },
+            ],
+          });
+        } else {
+          setTicketsOverTime({ 
+            labels: [], 
+            datasets: [{ 
+              label: 'Tickets Created', 
+              data: [], 
+              borderColor: '#4CAF50', 
+              backgroundColor: 'rgba(76, 175, 80, 0.2)', 
+              tension: 0.4, 
+              fill: true 
+            }] 
+          });
+        }
+      } else {
+        console.error('Failed to fetch tickets created over time:', await res.text());
+        setTicketsOverTime({ 
+          labels: [], 
+          datasets: [{ 
+            label: 'Tickets Created', 
+            data: [], 
+            borderColor: '#4CAF50', 
+            backgroundColor: 'rgba(76, 175, 80, 0.2)', 
+            tension: 0.4, 
+            fill: true 
+          }] 
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching tickets created over time:', error);
+      setTicketsOverTime({ 
+        labels: [], 
+        datasets: [{ 
+          label: 'Tickets Created', 
+          data: [], 
+          borderColor: '#4CAF50', 
+          backgroundColor: 'rgba(76, 175, 80, 0.2)', 
+          tension: 0.4, 
+          fill: true 
+        }] 
+      });
+    }
   };
 
-  // Add fetchTicketsOverTime to refreshAllChartData
   const refreshAllChartData = async () => {
     setLoading(true);
     try {
@@ -561,7 +573,7 @@ const TicketCharts = () => {
         fetchResolvedTickets(),
         fetchSLACompliance(),
         fetchAvgResolutionTime(),
-        fetchTicketsOverTime()
+        fetchTicketsOverTime() 
       ]);
     } catch (error) {
       console.error("TicketCharts: Error in refreshAllChartData Promise.all:", error);
@@ -573,12 +585,12 @@ const TicketCharts = () => {
   useEffect(() => {
     refreshAllChartData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Initial fetch
+  }, []); 
 
   useEffect(() => {
     if (filtersApplied) {
       refreshAllChartData();
-      setFiltersApplied(false); // Reset flag
+      setFiltersApplied(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStartDate, filterEndDate, filterPriority, filtersApplied]);
@@ -597,15 +609,15 @@ const TicketCharts = () => {
     if (tempFilterEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: tempFilterEndDate });
     if (tempFilterPriority && tempFilterPriority !== 'All') activeFilters.push({ key: 'priority', label: 'Priority', value: tempFilterPriority });
     setActiveFiltersForDisplay(activeFilters);
-    setFiltersApplied(true); // Trigger data refresh
+    setFiltersApplied(true); 
     closePopup();
   };
 
   const handleClearPopupAndApplyFilters = () => {
-    setTempFilterStartDate(''); setTempFilterEndDate(''); setTempFilterPriority('All'); // Clear temps
-    setFilterStartDate(''); setFilterEndDate(''); setFilterPriority('All'); // Clear actual filters
+    setTempFilterStartDate(''); setTempFilterEndDate(''); setTempFilterPriority('All'); 
+    setFilterStartDate(''); setFilterEndDate(''); setFilterPriority('All'); 
     setActiveFiltersForDisplay([]);
-    setFiltersApplied(true); // Trigger data refresh
+    setFiltersApplied(true); 
     closePopup();
   };
 
@@ -623,7 +635,7 @@ const TicketCharts = () => {
     if (newEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: newEndDate });
     if (newPriority && newPriority !== 'All') activeFilters.push({ key: 'priority', label: 'Priority', value: newPriority });
     setActiveFiltersForDisplay(activeFilters);
-    setFiltersApplied(true); // Trigger data refresh
+    setFiltersApplied(true); 
   };
 
   useEffect(() => {
@@ -683,7 +695,7 @@ const TicketCharts = () => {
     datasets: [{
       data: slaComplianceData.length > 0 && slaComplianceData[0].total_tickets > 0
         ? [parseInt(slaComplianceData[0].within_sla), slaComplianceData[0].total_tickets - parseInt(slaComplianceData[0].within_sla)]
-        : [0, 0], // Provide default empty data
+        : [0, 0], 
       backgroundColor: ['#24d16d', '#c0392b'], hoverOffset: 6,
     }],
   };
@@ -704,7 +716,7 @@ const TicketCharts = () => {
     datasets: [{ label: 'Ticket Volume by Status', data: statusCounts, backgroundColor: ['#FF6384', '#36A2EB', '#f0b629', '#4BC0C0', '#9966FF', '#FF9F40'], borderWidth: 1, }],
   };
   const ticketsByStatusChartOptions = {
-    responsive: true, layout: { padding: { top: 0, bottom: 0, left: 0, right: 0 } }, // Adjusted padding
+    responsive: true, layout: { padding: { top: 0, bottom: 0, left: 0, right: 0 } }, 
     plugins: {
       legend: { position: 'right' as const, labels: { color: 'white' } },
       tooltip: { bodyColor: 'white', titleColor: 'white' },
@@ -720,13 +732,13 @@ const TicketCharts = () => {
       ],
       backgroundColor: [
         avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES * 0.8 
-          ? '#f39c12' // Warning color (Orange)
-          : (avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES ? '#e74c3c' : '#635bff'), // Critical (Red) or Good (Purple)
-        '#302552', // Background color for the "empty" part
+          ? '#f39c12' 
+          : (avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES ? '#e74c3c' : '#635bff'), 
+        '#302552', 
       ],
       borderColor: [
         avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES * 0.8 
-          ? '#c0392b' // Darker warning/critical
+          ? '#c0392b' 
           : (avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES ? '#c0392b' : '#4e49c4'),
         '#2a274f',
       ],
@@ -749,36 +761,34 @@ const TicketCharts = () => {
 
   const handleChartClick = (event: React.MouseEvent<HTMLCanvasElement>, chartRef: React.RefObject<ChartJS | null>, chartType: 'ticketsResolved' | 'slaCompliance' | 'volumeByStatus') => {
     if (!chartRef.current) return;
-    const chartInstance = chartRef.current as ChartJS; // Type assertion
+    const chartInstance = chartRef.current as ChartJS; 
     const elements = getElementAtEvent(chartInstance, event);
 
     if (elements.length > 0) {
       const { datasetIndex, index } = elements[0];
       let label: string = '';
-      let value: number = 0; // Or string, depending on data
-      let title: string = 'Default Modal Title'; // Fallback title
+      let value: number = 0; 
+      let title: string = 'Default Modal Title'; 
       let fetchCriteria: any = {};
 
       if (chartType === 'ticketsResolved') {
-        // Ensure data is available for barData
         if (barData.labels && barData.labels[index] && barData.datasets[datasetIndex]?.data[index] !== undefined) {
           label = barData.labels[index];
-          value = barData.datasets[datasetIndex].data[index] as number; // Assuming data is number[]
+          value = barData.datasets[datasetIndex].data[index] as number; 
           title = `Tickets: ${label} (${value})`;
         } else {
           console.error("Data missing for ticketsResolved chart click");
-          title = "Tickets Resolved: Error"; // More informative error title
+          title = "Tickets Resolved: Error"; 
         }
         fetchCriteria = { 
           type: 'resolvedStatus', 
-          status: label, // This will be "Resolved" or "Unresolved"
+          status: label, 
           ...getGlobalFiltersForDrilldown() 
         };
       } else if (chartType === 'slaCompliance') {
-        // Ensure data for slaDoughnutData
         if (slaDoughnutData.labels && slaDoughnutData.labels[index] && slaDoughnutData.datasets[datasetIndex]?.data[index] !== undefined) {
           label = slaDoughnutData.labels[index];
-          value = slaDoughnutData.datasets[datasetIndex].data[index] as number; // Assuming data is number[]
+          value = slaDoughnutData.datasets[datasetIndex].data[index] as number; 
           title = `SLA Compliance: ${label} (${value} tickets)`;
         } else {
           console.error("Data missing for slaCompliance chart click");
@@ -786,7 +796,6 @@ const TicketCharts = () => {
         }
         fetchCriteria = { type: 'slaStatus', sla: label, ...getGlobalFiltersForDrilldown() };
       } else if (chartType === 'volumeByStatus') {
-        // Ensure data for ticketsByStatusChartData
         if (ticketsByStatusChartData.labels && ticketsByStatusChartData.labels[index] && ticketsByStatusChartData.datasets[datasetIndex]?.data[index] !== undefined) {
           label = ticketsByStatusChartData.labels[index] as string;
           value = ticketsByStatusChartData.datasets[datasetIndex].data[index] as number;
@@ -799,37 +808,50 @@ const TicketCharts = () => {
       }
 
       console.log("[handleChartClick] Attempting to open modal with title:", title, "and criteria:", fetchCriteria); 
-      // Only open modal if a meaningful title was generated (not default or error)
       if (title && title !== 'Default Modal Title' && !title.includes("Error")) { 
           openDrillDownModal(title, fetchCriteria);
       } else {
           console.error("[handleChartClick] Meaningful title not generated or error in data, not opening modal or using fallback.");
-          // Optionally, provide user feedback here if appropriate
       }
     }
   };
 
   const getGlobalFiltersForDrilldown = () => ({ startDate: filterStartDate, endDate: filterEndDate, priority: filterPriority === 'All' ? undefined : filterPriority, });
 
-  // Add this with other chart click handlers
   const handleTicketsOverTimeClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!ticketsOverTimeChartRef.current) return;
     
     const elements = getElementAtEvent(ticketsOverTimeChartRef.current, event);
     if (elements.length > 0) {
-      const { datasetIndex, index } = elements[0];
-      const status = ticketsOverTime.datasets[datasetIndex].label;
-      const month = ticketsOverTime.labels[index];
-      const value = ticketsOverTime.datasets[datasetIndex].data[index];
+      const { index } = elements[0]; 
       
-      const title = `${status} Tickets - ${month} (${value})`;
-      const fetchCriteria = {
-        type: 'ticketStatus',
-        status,
-        ...getGlobalFiltersForDrilldown()
-      };
+      const monthYearLabel = ticketsOverTime.labels[index]; 
+      const value = ticketsOverTime.datasets[0].data[index]; 
       
-      openDrillDownModal(title, fetchCriteria);
+      const parts = monthYearLabel.split(' ');
+      if (parts.length === 2) {
+        const monthStr = parts[0]; 
+        const yearStr = parts[1]; 
+        const year = parseInt(yearStr);
+        const month = monthNameToNumber[monthStr]; 
+
+        if (!isNaN(year) && month) {
+          const title = `Tickets Created - ${monthYearLabel} (${value})`;
+          const fetchCriteria = {
+            type: 'monthlyCreatedTickets',
+            year: year,
+            month: month,
+            ...getGlobalFiltersForDrilldown() 
+          };
+          
+          console.log("[handleTicketsOverTimeClick] Opening drill-down with criteria:", fetchCriteria);
+          openDrillDownModal(title, fetchCriteria);
+        } else {
+          console.error("Could not parse year/month from label:", monthYearLabel);
+        }
+      } else {
+        console.error("Label format unexpected for parsing:", monthYearLabel);
+      }
     }
   };
 
@@ -951,14 +973,14 @@ const TicketCharts = () => {
         </ChartSection>
 
         <FullWidthCard>
-          <CardTitle><FiBarChart2 /> Tickets Over Time</CardTitle>
-          <div style={{ position: 'relative', height: 'calc(100% - 40px)' }}>
-            {loading ? (
+          <CardTitle><FiBarChart2 /> Tickets Created Over Time</CardTitle>
+          <div style={{ position: 'relative', height: 'calc(100% - 40px)' }}> 
+            {loading && ticketsOverTime.labels.length === 0 ? ( 
               <NoDataMessage>Loading chart...</NoDataMessage>
             ) : ticketsOverTime.labels.length > 0 ? (
               <Line
                 ref={ticketsOverTimeChartRef}
-                data={ticketsOverTime}
+                data={ticketsOverTime} 
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
@@ -974,8 +996,8 @@ const TicketCharts = () => {
                         padding: 15
                       }
                     },
-                    datalabels: {
-                      display: false
+                    datalabels: { 
+                      display: false 
                     }
                   },
                   scales: {
@@ -991,7 +1013,7 @@ const TicketCharts = () => {
                           size: 12
                         },
                         padding: 10,
-                        stepSize: 1
+                        stepSize: Math.max(1, ...ticketsOverTime.datasets[0].data) > 10 ? undefined : 1 
                       }
                     },
                     x: {
@@ -1009,9 +1031,9 @@ const TicketCharts = () => {
                     }
                   },
                   interaction: {
-                    mode: 'nearest',
+                    mode: 'nearest', 
                     axis: 'x',
-                    intersect: true
+                    intersect: false 
                   },
                   elements: {
                     point: {
@@ -1023,10 +1045,10 @@ const TicketCharts = () => {
                     }
                   }
                 }}
-                onClick={handleTicketsOverTimeClick}
+                onClick={handleTicketsOverTimeClick} 
               />
             ) : (
-              <NoDataMessage>No data available for tickets over time.</NoDataMessage>
+              <NoDataMessage>No data available for tickets created over time.</NoDataMessage>
             )}
           </div>
         </FullWidthCard>

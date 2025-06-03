@@ -1,15 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcrypt')
+const crypto = require('crypto');
 const mysql = require('mysql2');
+const nodemailer = require('nodemailer');
 
 const db = mysql.createPool({
-  host: '5.tcp.eu.ngrok.io',
+  host: '4.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 10964,
+  port: 16741,
 }).promise();
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  }
+});
 
 // GET /api/check-auth
 router.get('/check-auth', (req, res) => {
@@ -255,6 +265,36 @@ router.get('/tickets-by-status-tickets', async (req, res) => {
   }
 });
 
+// GET /api/monthly-ticket-counts
+router.get('/monthly-ticket-counts', async (req, res) => {
+  const { start_date, end_date, priority } = req.query;
+  try {
+    const [rows] = await db.query(
+      'CALL get_monthly_ticket_counts(?, ?, ?)',
+      [start_date || null, end_date || null, priority || null]
+    );
+    res.json(rows[0] || rows);
+  } catch (err) {
+    console.error('Error calling get_monthly_ticket_counts:', err);
+    res.status(500).json({ message: 'Error fetching monthly ticket counts.' });
+  }
+});
+
+// GET /api/monthly-ticket-counts-tickets
+router.get('/monthly-ticket-counts-tickets', async (req, res) => {
+  const { start_date, end_date, priority, p_year_month } = req.query;
+  try {
+    const [rows] = await db.query(
+      'CALL get_tickets_grouped_by_month(?, ?, ?, ?)',
+      [start_date || null, end_date || null, priority || null, p_year_month || null]
+    );
+    res.json(rows[0] || rows);
+  } catch (err) {
+    console.error('Error calling get_tickets_grouped_by_month:', err);
+    res.status(500).json({ message: 'Error fetching tickets grouped by month.' });
+  }
+});
+
 // GET /api/resolution-time
 router.get('/resolution-time', async (req, res) => {
   const { start_date, end_date, priority } = req.query;
@@ -456,5 +496,83 @@ router.post('/logout', (req, res) => {
   });
 });
 
+router.post('/request-reset', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const [rows] = await db.execute('SELECT id, email FROM users WHERE email = ?', [email]);
+    const user = rows[0];
+
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 3600000);
+
+      await db.execute(
+        'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?',
+        [resetToken, tokenExpiry, user.id]
+      );
+      const resetLink = `${process.env.FRONTEND_URL}/login/forgot-password/reset-password?token=${resetToken}`;
+      await transporter.sendMail({
+        from: { name: "Daemonview", address: "noreply@daemonview.com" },
+        to: user.email,
+        subject: 'Password Reset Request',
+        html: `<p>Click this link to reset your password (the link expires in one hour): <a href="${resetLink}">Reset Password</a></p>`,
+      });
+    }
+  } catch (error) {
+    console.error('Error in /request-reset:', error);
+  }
+  res.status(200).json({ message: 'If an account exists, a reset link has been sent.' });
+});
+
+router.post('/validate-token', async (req, res) => {
+    try {
+        const { token } = req.body;
+        const [rows] = await db.execute(
+            'SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()',
+            [token]
+        );
+
+        if (rows.length === 0) {
+            return res.status(400).json({ message: 'This link is invalid or has expired.' });
+        }
+
+        res.status(200).json({ message: 'Token is valid.' });
+    } catch (error) {
+        console.error('Error in /validate-token:', error);
+        res.status(500).json({ message: 'An internal server error occurred.' });
+    }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    const [rows] = await db.execute(
+      'SELECT id, email FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()',
+      [token]
+    );
+    const user = rows[0];
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await db.execute(
+      'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?',
+      [hashedPassword, user.id]
+    );
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: user.email,
+      subject: 'Your Password Has Been Changed',
+      html: `<p>This is a confirmation that the password for your account has just been changed.</p>`,
+    });
+
+    res.status(200).json({ message: 'Password has been successfully reset.' });
+  } catch (error) {
+    console.error('Error in /reset-password:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
 
 module.exports = router;

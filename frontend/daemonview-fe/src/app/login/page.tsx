@@ -52,7 +52,13 @@ const FormWrapper = styled.div`
   align-items: center;
   height: auto;
 
-  /* Add subtle glowing effect */
+  animation: fadeIn 0.7s ease-in-out;
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   box-shadow:
     0 0 8px rgba(190, 75, 243, 0.4),
     0 0 16px rgba(91, 57, 182, 0.2),
@@ -141,6 +147,25 @@ const ErrorMessage = styled.p`
   margin-top: 0.5rem;
 `;
 
+const CornerImage = styled.img`
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 230px; 
+  height: auto;
+  z-index: 2;
+`;
+
+const Footer = styled.footer`
+  position: absolute;
+  bottom: 20px;
+  width: 100%;
+  text-align: center;
+  color: #a3a3a3;
+  font-size: 0.8rem;
+  z-index: 1;
+`;
+
 const LoginForm: React.FC = () => {
   const router = useRouter();
   const { setLoading } = useLoading();
@@ -190,6 +215,7 @@ const LoginForm: React.FC = () => {
 
   return (
     <Container>
+      <CornerImage src="/images/daemonview.png" alt="DaemonView logo" />
       <FormWrapper>
         <Title>Login</Title>
         <form onSubmit={handleSubmit}>
@@ -202,6 +228,7 @@ const LoginForm: React.FC = () => {
           <a href="/login/forgot-password">Forgot Password?</a>
         </Links>
       </FormWrapper>
+      <Footer>© {new Date().getFullYear()} DaemonView. All rights reserved.</Footer>
     </Container>
   );
 };

@@ -761,7 +761,19 @@ const AccountAdminPage = () => {
     fetchUser();
   }, [router]);
 
-  const handleLogout = () => router.push('/login');
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:8080/api/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+  
   const handleProfileClick = () => router.push('/dashboard/profile');
 
   const handleSelectTeam = (team: Team) => {
