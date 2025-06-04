@@ -32,6 +32,8 @@ import {
   ChartType,
 } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
+import { useAuth } from '../../context/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 ChartJS.register(
   BarElement,
@@ -116,13 +118,13 @@ const mapApiTicketToDrillDownTicket = (apiTicket: any): DrillDownTicket => {
     try {
       const dateObj = new Date(dateString);
       if (isNaN(dateObj.getTime())) {
-          console.warn(`Invalid date string received from API: ${dateString}`);
-          return dateString; 
+        console.warn(`Invalid date string received from API: ${dateString}`);
+        return dateString;
       }
-      return dateObj.toLocaleString(undefined, { 
+      return dateObj.toLocaleString(undefined, {
         year: 'numeric', month: 'numeric', day: 'numeric',
         hour: 'numeric', minute: '2-digit', second: '2-digit',
-        hour12: true 
+        hour12: true
       });
     } catch (e) {
       console.warn(`Could not parse or format date-time: ${dateString}`, e);
@@ -133,10 +135,10 @@ const mapApiTicketToDrillDownTicket = (apiTicket: any): DrillDownTicket => {
   let withinSlaStatus: string;
   if (typeof apiTicket['Within SLA'] === 'number') {
     withinSlaStatus = apiTicket['Within SLA'] === 1 ? 'Yes' : 'No';
-  } else if (apiTicket['SLA Status']) { 
+  } else if (apiTicket['SLA Status']) {
     withinSlaStatus = apiTicket['SLA Status'].toLowerCase() === 'compliant' ? 'Yes' : 'No';
   } else {
-    withinSlaStatus = 'Pending'; 
+    withinSlaStatus = 'Pending';
   }
 
   return {
@@ -155,7 +157,7 @@ const mapApiTicketToDrillDownTicket = (apiTicket: any): DrillDownTicket => {
     withinSla: withinSlaStatus,
     relatedIncidents: apiTicket['Related Incidents'] || apiTicket.relatedIncidents,
     relatedDevices: apiTicket['Related Devices'] || apiTicket.relatedDevices,
-    notes: apiTicket['Notes'] || apiTicket.notes, 
+    notes: apiTicket['Notes'] || apiTicket.notes,
   };
 };
 
@@ -237,13 +239,13 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
         console.error(`[DEBUG FRONTEND] API Error: Failed to fetch drill-down data for ${criteria.type}. Status: ${response.status}, Full Response: ${responseText}`);
         throw new Error(`API Error ${response.status}: ${responseText || `Failed to fetch ${criteria.type} drill-down data`}`);
       }
-      
+
       let apiTickets;
       try {
-          apiTickets = JSON.parse(responseText);
+        apiTickets = JSON.parse(responseText);
       } catch (parseError) {
-          console.error(`[DEBUG FRONTEND] Failed to parse JSON response for ${criteria.type}:`, parseError, "Response text was:", responseText);
-          return [];
+        console.error(`[DEBUG FRONTEND] Failed to parse JSON response for ${criteria.type}:`, parseError, "Response text was:", responseText);
+        return [];
       }
 
       console.log(`[DEBUG FRONTEND] Parsed API Tickets (apiTickets) for ${criteria.type}:`, apiTickets);
@@ -266,24 +268,24 @@ const fetchDrillDownData = async (criteria: any): Promise<DrillDownTicket[]> => 
     await new Promise(resolve => setTimeout(resolve, 300));
 
     let filteredMockTickets = [...mockDrillDownTickets];
-    
+
     if (criteria.priority && typeof criteria.priority === 'string' && criteria.priority.toLowerCase() !== 'all') {
-        filteredMockTickets = filteredMockTickets.filter(t => t.priority && typeof t.priority === 'string' && t.priority.toLowerCase() === criteria.priority.toLowerCase());
+      filteredMockTickets = filteredMockTickets.filter(t => t.priority && typeof t.priority === 'string' && t.priority.toLowerCase() === criteria.priority.toLowerCase());
     }
     if (criteria.type === 'resolvedStatus') {
-        if (criteria.status === 'Resolved') {
-            filteredMockTickets = filteredMockTickets.filter(t => t.status && (t.status.toLowerCase() === 'resolved' || t.status.toLowerCase() === 'closed'));
-        } else if (criteria.status === 'Unresolved') {
-            filteredMockTickets = filteredMockTickets.filter(t => t.status && !(t.status.toLowerCase() === 'resolved' || t.status.toLowerCase() === 'closed'));
-        }
+      if (criteria.status === 'Resolved') {
+        filteredMockTickets = filteredMockTickets.filter(t => t.status && (t.status.toLowerCase() === 'resolved' || t.status.toLowerCase() === 'closed'));
+      } else if (criteria.status === 'Unresolved') {
+        filteredMockTickets = filteredMockTickets.filter(t => t.status && !(t.status.toLowerCase() === 'resolved' || t.status.toLowerCase() === 'closed'));
+      }
     }
     if (criteria.type === 'monthlyCreatedTickets' && criteria.year && criteria.month) {
-        filteredMockTickets = filteredMockTickets.filter(t => {
-            try {
-                const createdDate = new Date(t.createdAt);
-                return createdDate.getFullYear() === criteria.year && (createdDate.getMonth() + 1) === criteria.month;
-            } catch (e) { return false; }
-        });
+      filteredMockTickets = filteredMockTickets.filter(t => {
+        try {
+          const createdDate = new Date(t.createdAt);
+          return createdDate.getFullYear() === criteria.year && (createdDate.getMonth() + 1) === criteria.month;
+        } catch (e) { return false; }
+      });
     }
 
     console.log(`[DEBUG FRONTEND] Fallback: Returning ${filteredMockTickets.length} mock tickets after filtering.`);
@@ -333,7 +335,7 @@ const TicketCharts = () => {
   const ticketsByStatusChartRef = useRef<ChartJS<'doughnut', number[], string> | null>(null);
 
   const [avgResTimeInMinutes, setAvgResTimeInMinutes] = useState(0);
-  const MAX_RESOLUTION_TIME_MINUTES = 8 * 60; 
+  const MAX_RESOLUTION_TIME_MINUTES = 8 * 60;
 
   const [ticketsOverTime, setTicketsOverTime] = useState<TicketsOverTimeData>({
     labels: [],
@@ -341,7 +343,7 @@ const TicketCharts = () => {
       {
         label: 'Tickets Created',
         data: [] as number[],
-        borderColor: '#4CAF50', 
+        borderColor: '#4CAF50',
         backgroundColor: 'rgba(76, 175, 80, 0.2)',
         tension: 0.4,
         fill: true
@@ -353,20 +355,22 @@ const TicketCharts = () => {
   const timeStringToMinutes = (timeStr: string | null | undefined): number => {
     if (!timeStr) return 0;
     const parts = timeStr.split(':');
-    if (parts.length === 3) { 
+    if (parts.length === 3) {
       const [h, m, s] = parts.map(Number);
       if (isNaN(h) || isNaN(m) || isNaN(s)) return 0;
       return (h * 60) + m + (s / 60);
-    } else if (parts.length === 2) { 
+    } else if (parts.length === 2) {
       const [p1, p2] = parts.map(Number);
       if (isNaN(p1) || isNaN(p2)) return 0;
-      return p1 > 59 ? (p1 * 60) + p2 : p1 + (p2 / 60) ; 
-    } else if (parts.length === 1 && !isNaN(Number(timeStr))) { 
-        return Number(timeStr);
+      return p1 > 59 ? (p1 * 60) + p2 : p1 + (p2 / 60);
+    } else if (parts.length === 1 && !isNaN(Number(timeStr))) {
+      return Number(timeStr);
     }
     console.warn("Could not parse time string:", timeStr);
     return 0;
   };
+
+  const auth = useAuth();
 
   useEffect(() => {
     if (averageResolutionTime) {
@@ -419,9 +423,9 @@ const TicketCharts = () => {
       fileNameBase = drillDownTitle.replace(/[^a-z0-9_]/gi, '_').replace(/_{2,}/g, '_');
     }
     const fileName = `${fileNameBase}.xlsx`;
-    XLSX.writeFile(workbook, fileName); 
+    XLSX.writeFile(workbook, fileName);
   };
-  
+
   const fetchTicketsByStatus = async () => {
     const queryString = buildChartApiQueryString();
     try {
@@ -461,7 +465,7 @@ const TicketCharts = () => {
     try {
       const res = await fetch(`http://localhost:8080/api/sla-compliance${queryString ? `?${queryString}` : ''}`, { credentials: 'include' });
       if (res.ok) {
-        const data = await res.json(); 
+        const data = await res.json();
         setSlaComplianceData(data);
       } else {
         console.error('Failed to fetch SLA data:', await res.text());
@@ -492,7 +496,7 @@ const TicketCharts = () => {
   };
 
   const fetchTicketsOverTime = async () => {
-    const queryString = buildChartApiQueryString(); 
+    const queryString = buildChartApiQueryString();
     try {
       const res = await fetch(`http://localhost:8080/api/monthly-ticket-counts${queryString ? `?${queryString}` : ''}`, { credentials: 'include' });
       if (res.ok) {
@@ -515,7 +519,7 @@ const TicketCharts = () => {
               {
                 label: 'Tickets Created',
                 data: counts,
-                borderColor: '#4CAF50', 
+                borderColor: '#4CAF50',
                 backgroundColor: 'rgba(76, 175, 80, 0.2)',
                 tension: 0.4,
                 fill: true,
@@ -523,44 +527,44 @@ const TicketCharts = () => {
             ],
           });
         } else {
-          setTicketsOverTime({ 
-            labels: [], 
-            datasets: [{ 
-              label: 'Tickets Created', 
-              data: [], 
-              borderColor: '#4CAF50', 
-              backgroundColor: 'rgba(76, 175, 80, 0.2)', 
-              tension: 0.4, 
-              fill: true 
-            }] 
+          setTicketsOverTime({
+            labels: [],
+            datasets: [{
+              label: 'Tickets Created',
+              data: [],
+              borderColor: '#4CAF50',
+              backgroundColor: 'rgba(76, 175, 80, 0.2)',
+              tension: 0.4,
+              fill: true
+            }]
           });
         }
       } else {
         console.error('Failed to fetch tickets created over time:', await res.text());
-        setTicketsOverTime({ 
-          labels: [], 
-          datasets: [{ 
-            label: 'Tickets Created', 
-            data: [], 
-            borderColor: '#4CAF50', 
-            backgroundColor: 'rgba(76, 175, 80, 0.2)', 
-            tension: 0.4, 
-            fill: true 
-          }] 
+        setTicketsOverTime({
+          labels: [],
+          datasets: [{
+            label: 'Tickets Created',
+            data: [],
+            borderColor: '#4CAF50',
+            backgroundColor: 'rgba(76, 175, 80, 0.2)',
+            tension: 0.4,
+            fill: true
+          }]
         });
       }
     } catch (error) {
       console.error('Error fetching tickets created over time:', error);
-      setTicketsOverTime({ 
-        labels: [], 
-        datasets: [{ 
-          label: 'Tickets Created', 
-          data: [], 
-          borderColor: '#4CAF50', 
-          backgroundColor: 'rgba(76, 175, 80, 0.2)', 
-          tension: 0.4, 
-          fill: true 
-        }] 
+      setTicketsOverTime({
+        labels: [],
+        datasets: [{
+          label: 'Tickets Created',
+          data: [],
+          borderColor: '#4CAF50',
+          backgroundColor: 'rgba(76, 175, 80, 0.2)',
+          tension: 0.4,
+          fill: true
+        }]
       });
     }
   };
@@ -573,7 +577,7 @@ const TicketCharts = () => {
         fetchResolvedTickets(),
         fetchSLACompliance(),
         fetchAvgResolutionTime(),
-        fetchTicketsOverTime() 
+        fetchTicketsOverTime()
       ]);
     } catch (error) {
       console.error("TicketCharts: Error in refreshAllChartData Promise.all:", error);
@@ -581,18 +585,18 @@ const TicketCharts = () => {
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
     refreshAllChartData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (filtersApplied) {
       refreshAllChartData();
-      setFiltersApplied(false); 
+      setFiltersApplied(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStartDate, filterEndDate, filterPriority, filtersApplied]);
 
 
@@ -609,15 +613,15 @@ const TicketCharts = () => {
     if (tempFilterEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: tempFilterEndDate });
     if (tempFilterPriority && tempFilterPriority !== 'All') activeFilters.push({ key: 'priority', label: 'Priority', value: tempFilterPriority });
     setActiveFiltersForDisplay(activeFilters);
-    setFiltersApplied(true); 
+    setFiltersApplied(true);
     closePopup();
   };
 
   const handleClearPopupAndApplyFilters = () => {
-    setTempFilterStartDate(''); setTempFilterEndDate(''); setTempFilterPriority('All'); 
-    setFilterStartDate(''); setFilterEndDate(''); setFilterPriority('All'); 
+    setTempFilterStartDate(''); setTempFilterEndDate(''); setTempFilterPriority('All');
+    setFilterStartDate(''); setFilterEndDate(''); setFilterPriority('All');
     setActiveFiltersForDisplay([]);
-    setFiltersApplied(true); 
+    setFiltersApplied(true);
     closePopup();
   };
 
@@ -627,7 +631,7 @@ const TicketCharts = () => {
     if (filterToRemoveKey === 'startDate') newStartDate = '';
     if (filterToRemoveKey === 'endDate') newEndDate = '';
     if (filterToRemoveKey === 'priority') newPriority = 'All';
-    
+
     setFilterStartDate(newStartDate); setFilterEndDate(newEndDate); setFilterPriority(newPriority);
 
     const activeFilters: ActiveFilterDisplay[] = [];
@@ -635,14 +639,14 @@ const TicketCharts = () => {
     if (newEndDate) activeFilters.push({ key: 'endDate', label: 'End Date', value: newEndDate });
     if (newPriority && newPriority !== 'All') activeFilters.push({ key: 'priority', label: 'Priority', value: newPriority });
     setActiveFiltersForDisplay(activeFilters);
-    setFiltersApplied(true); 
+    setFiltersApplied(true);
   };
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/check-auth', { method: 'GET', credentials: 'include' });
-        if (res.ok) { const data = await res.json(); setUsername(data.user.username); }
+        const res = await fetch('http://localhost:8080/api/me', { method: 'GET', credentials: 'include' });
+        if (res.ok) { const data = await res.json(); setUsername(auth.user?.username || ""); }
         else { router.push('/login'); }
       } catch (err) { console.error('Auth check failed', err); router.push('/login'); }
     };
@@ -650,13 +654,17 @@ const TicketCharts = () => {
   }, [router]);
 
   const handleProfileClick = () => router.push('/dashboard/profile');
-  const handleLogout = async () => { try { await fetch('http://localhost:8080/api/logout', { method: 'POST', credentials: 'include' }); router.push('/login'); } catch (error) { console.error('Logout failed:', error); } };
+  const handleLogout = async () => {
+    if (auth) {
+      auth.logout();
+    }
+  };
 
   const sidebarIcons = [
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
     { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
     { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
-    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator')},
+    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator') },
   ];
 
   const barData = {
@@ -695,7 +703,7 @@ const TicketCharts = () => {
     datasets: [{
       data: slaComplianceData.length > 0 && slaComplianceData[0].total_tickets > 0
         ? [parseInt(slaComplianceData[0].within_sla), slaComplianceData[0].total_tickets - parseInt(slaComplianceData[0].within_sla)]
-        : [0, 0], 
+        : [0, 0],
       backgroundColor: ['#24d16d', '#c0392b'], hoverOffset: 6,
     }],
   };
@@ -716,7 +724,7 @@ const TicketCharts = () => {
     datasets: [{ label: 'Ticket Volume by Status', data: statusCounts, backgroundColor: ['#FF6384', '#36A2EB', '#f0b629', '#4BC0C0', '#9966FF', '#FF9F40'], borderWidth: 1, }],
   };
   const ticketsByStatusChartOptions = {
-    responsive: true, layout: { padding: { top: 0, bottom: 0, left: 0, right: 0 } }, 
+    responsive: true, layout: { padding: { top: 0, bottom: 0, left: 0, right: 0 } },
     plugins: {
       legend: { position: 'right' as const, labels: { color: 'white' } },
       tooltip: { bodyColor: 'white', titleColor: 'white' },
@@ -731,14 +739,14 @@ const TicketCharts = () => {
         Math.max(0, MAX_RESOLUTION_TIME_MINUTES - avgResTimeInMinutes)
       ],
       backgroundColor: [
-        avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES * 0.8 
-          ? '#f39c12' 
-          : (avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES ? '#e74c3c' : '#635bff'), 
-        '#302552', 
+        avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES * 0.8
+          ? '#f39c12'
+          : (avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES ? '#e74c3c' : '#635bff'),
+        '#302552',
       ],
       borderColor: [
-        avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES * 0.8 
-          ? '#c0392b' 
+        avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES * 0.8
+          ? '#c0392b'
           : (avgResTimeInMinutes > MAX_RESOLUTION_TIME_MINUTES ? '#c0392b' : '#4e49c4'),
         '#2a274f',
       ],
@@ -761,34 +769,34 @@ const TicketCharts = () => {
 
   const handleChartClick = (event: React.MouseEvent<HTMLCanvasElement>, chartRef: React.RefObject<ChartJS | null>, chartType: 'ticketsResolved' | 'slaCompliance' | 'volumeByStatus') => {
     if (!chartRef.current) return;
-    const chartInstance = chartRef.current as ChartJS; 
+    const chartInstance = chartRef.current as ChartJS;
     const elements = getElementAtEvent(chartInstance, event);
 
     if (elements.length > 0) {
       const { datasetIndex, index } = elements[0];
       let label: string = '';
-      let value: number = 0; 
-      let title: string = 'Default Modal Title'; 
+      let value: number = 0;
+      let title: string = 'Default Modal Title';
       let fetchCriteria: any = {};
 
       if (chartType === 'ticketsResolved') {
         if (barData.labels && barData.labels[index] && barData.datasets[datasetIndex]?.data[index] !== undefined) {
           label = barData.labels[index];
-          value = barData.datasets[datasetIndex].data[index] as number; 
+          value = barData.datasets[datasetIndex].data[index] as number;
           title = `Tickets: ${label} (${value})`;
         } else {
           console.error("Data missing for ticketsResolved chart click");
-          title = "Tickets Resolved: Error"; 
+          title = "Tickets Resolved: Error";
         }
-        fetchCriteria = { 
-          type: 'resolvedStatus', 
-          status: label, 
-          ...getGlobalFiltersForDrilldown() 
+        fetchCriteria = {
+          type: 'resolvedStatus',
+          status: label,
+          ...getGlobalFiltersForDrilldown()
         };
       } else if (chartType === 'slaCompliance') {
         if (slaDoughnutData.labels && slaDoughnutData.labels[index] && slaDoughnutData.datasets[datasetIndex]?.data[index] !== undefined) {
           label = slaDoughnutData.labels[index];
-          value = slaDoughnutData.datasets[datasetIndex].data[index] as number; 
+          value = slaDoughnutData.datasets[datasetIndex].data[index] as number;
           title = `SLA Compliance: ${label} (${value} tickets)`;
         } else {
           console.error("Data missing for slaCompliance chart click");
@@ -807,11 +815,11 @@ const TicketCharts = () => {
         fetchCriteria = { type: 'ticketStatus', status: label, ...getGlobalFiltersForDrilldown() };
       }
 
-      console.log("[handleChartClick] Attempting to open modal with title:", title, "and criteria:", fetchCriteria); 
-      if (title && title !== 'Default Modal Title' && !title.includes("Error")) { 
-          openDrillDownModal(title, fetchCriteria);
+      console.log("[handleChartClick] Attempting to open modal with title:", title, "and criteria:", fetchCriteria);
+      if (title && title !== 'Default Modal Title' && !title.includes("Error")) {
+        openDrillDownModal(title, fetchCriteria);
       } else {
-          console.error("[handleChartClick] Meaningful title not generated or error in data, not opening modal or using fallback.");
+        console.error("[handleChartClick] Meaningful title not generated or error in data, not opening modal or using fallback.");
       }
     }
   };
@@ -820,20 +828,20 @@ const TicketCharts = () => {
 
   const handleTicketsOverTimeClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!ticketsOverTimeChartRef.current) return;
-    
+
     const elements = getElementAtEvent(ticketsOverTimeChartRef.current, event);
     if (elements.length > 0) {
-      const { index } = elements[0]; 
-      
-      const monthYearLabel = ticketsOverTime.labels[index]; 
-      const value = ticketsOverTime.datasets[0].data[index]; 
-      
+      const { index } = elements[0];
+
+      const monthYearLabel = ticketsOverTime.labels[index];
+      const value = ticketsOverTime.datasets[0].data[index];
+
       const parts = monthYearLabel.split(' ');
       if (parts.length === 2) {
-        const monthStr = parts[0]; 
-        const yearStr = parts[1]; 
+        const monthStr = parts[0];
+        const yearStr = parts[1];
         const year = parseInt(yearStr);
-        const month = monthNameToNumber[monthStr]; 
+        const month = monthNameToNumber[monthStr];
 
         if (!isNaN(year) && month) {
           const title = `Tickets Created - ${monthYearLabel} (${value})`;
@@ -841,9 +849,9 @@ const TicketCharts = () => {
             type: 'monthlyCreatedTickets',
             year: year,
             month: month,
-            ...getGlobalFiltersForDrilldown() 
+            ...getGlobalFiltersForDrilldown()
           };
-          
+
           console.log("[handleTicketsOverTimeClick] Opening drill-down with criteria:", fetchCriteria);
           openDrillDownModal(title, fetchCriteria);
         } else {
@@ -856,238 +864,246 @@ const TicketCharts = () => {
   };
 
   return (
-    <Wrapper>
-      <Sidebar $isOpen={sidebarOpen}>
-        {sidebarIcons.map(({ icon, label, onClick }, idx) => (
-          <SidebarButton key={idx} title={label} onClick={onClick}>
-            {icon}
-          </SidebarButton>
-        ))}
-      </Sidebar>
+    <ProtectedRoute>
+      <Wrapper>
+        <Sidebar $isOpen={sidebarOpen}>
+          {sidebarIcons
+            .filter(({ label }) => {
+              if (label === 'Account Admin' && auth.user?.role !== 'admin') return false;
+              return true;
+            })
+            .map(({ icon, label, onClick }, idx) => (
+              <SidebarButton key={idx} title={label} onClick={onClick}>
+                {icon}
+              </SidebarButton>
+            ))}
 
-      <Content $isSidebarOpen={sidebarOpen}>
-        <Header>
-          <LeftHeader>
-            <SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
-              {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
-            </SidebarToggle>
-          </LeftHeader>
-          <TitleImage src="/images/daemonview.png" alt="DaemonView" />
-          <UserArea>
-            <ProfileIcon onClick={handleProfileClick} />
-            {username}
-            <LogoutIcon onClick={handleLogout} />
-          </UserArea>
-        </Header>
+        </Sidebar>
 
-        <ControlsBar>
-          <RefreshButton onClick={refreshAllChartData} disabled={loading}>
-            <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
-          </RefreshButton>
-          <FilterControls>
-            {activeFiltersForDisplay.length > 0 && (
-              <AppliedFilters>
-                {activeFiltersForDisplay.map((filter) => (
-                  <FilterTag key={filter.key}>
-                    {filter.label}: {filter.value}
-                    <FilterTagX onClick={() => handleRemoveActiveFilterTag(filter.key)} />
-                  </FilterTag>
-                ))}
-              </AppliedFilters>
-            )}
-            <FilterWrapper>
-              <TableActions onClick={toggleFilterPopup}><FiFilter /></TableActions>
-              {showFilterPopup && (
-                <NewFilterPopup $isClosing={isClosingPopup} onClick={(e) => e.stopPropagation()}>
-                  <h4>Filter Options</h4>
-                  <label className={tempFilterStartDate ? 'active' : ''}>Start Date:
-                    <input type="date" value={tempFilterStartDate} onChange={(e) => setTempFilterStartDate(e.target.value)} max={tempFilterEndDate || new Date().toISOString().split('T')[0]} />
-                  </label>
-                  <label className={tempFilterEndDate ? 'active' : ''}>End Date:
-                    <input type="date" value={tempFilterEndDate} onChange={(e) => setTempFilterEndDate(e.target.value)} min={tempFilterStartDate} max={new Date().toISOString().split('T')[0]} />
-                  </label>
-                  <label className={tempFilterPriority && tempFilterPriority !== 'All' ? 'active' : ''}>Priority:
-                    <select value={tempFilterPriority} onChange={(e) => setTempFilterPriority(e.target.value)}>
-                      {priorityOptions.map((priority) => (<option key={priority} value={priority}>{priority}</option>))}
-                    </select>
-                  </label>
-                  <FilterPopupActions>
-                    <ClearFilterButton onClick={handleClearPopupAndApplyFilters}>Clear All</ClearFilterButton>
-                    <ApplyFilterButton onClick={handleApplyPopupFilters}>Apply</ApplyFilterButton>
-                  </FilterPopupActions>
-                </NewFilterPopup>
+        <Content $isSidebarOpen={sidebarOpen}>
+          <Header>
+            <LeftHeader>
+              <SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
+                {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
+              </SidebarToggle>
+            </LeftHeader>
+            <TitleImage src="/images/daemonview.png" alt="DaemonView" />
+            <UserArea>
+              <ProfileIcon onClick={handleProfileClick} />
+              {username}
+              <LogoutIcon onClick={handleLogout} />
+            </UserArea>
+          </Header>
+
+          <ControlsBar>
+            <RefreshButton onClick={refreshAllChartData} disabled={loading}>
+              <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
+            </RefreshButton>
+            <FilterControls>
+              {activeFiltersForDisplay.length > 0 && (
+                <AppliedFilters>
+                  {activeFiltersForDisplay.map((filter) => (
+                    <FilterTag key={filter.key}>
+                      {filter.label}: {filter.value}
+                      <FilterTagX onClick={() => handleRemoveActiveFilterTag(filter.key)} />
+                    </FilterTag>
+                  ))}
+                </AppliedFilters>
               )}
-            </FilterWrapper>
-          </FilterControls>
-        </ControlsBar>
+              <FilterWrapper>
+                <TableActions onClick={toggleFilterPopup}><FiFilter /></TableActions>
+                {showFilterPopup && (
+                  <NewFilterPopup $isClosing={isClosingPopup} onClick={(e) => e.stopPropagation()}>
+                    <h4>Filter Options</h4>
+                    <label className={tempFilterStartDate ? 'active' : ''}>Start Date:
+                      <input type="date" value={tempFilterStartDate} onChange={(e) => setTempFilterStartDate(e.target.value)} max={tempFilterEndDate || new Date().toISOString().split('T')[0]} />
+                    </label>
+                    <label className={tempFilterEndDate ? 'active' : ''}>End Date:
+                      <input type="date" value={tempFilterEndDate} onChange={(e) => setTempFilterEndDate(e.target.value)} min={tempFilterStartDate} max={new Date().toISOString().split('T')[0]} />
+                    </label>
+                    <label className={tempFilterPriority && tempFilterPriority !== 'All' ? 'active' : ''}>Priority:
+                      <select value={tempFilterPriority} onChange={(e) => setTempFilterPriority(e.target.value)}>
+                        {priorityOptions.map((priority) => (<option key={priority} value={priority}>{priority}</option>))}
+                      </select>
+                    </label>
+                    <FilterPopupActions>
+                      <ClearFilterButton onClick={handleClearPopupAndApplyFilters}>Clear All</ClearFilterButton>
+                      <ApplyFilterButton onClick={handleApplyPopupFilters}>Apply</ApplyFilterButton>
+                    </FilterPopupActions>
+                  </NewFilterPopup>
+                )}
+              </FilterWrapper>
+            </FilterControls>
+          </ControlsBar>
 
-        <ChartSection>
-          <Card>
-            <CardTitle><FiClock /> Avg. Resolution Time</CardTitle>
-            <AvgResTimeCardContent>
-              {loading && !averageResolutionTime ? (
-                <AvgResTimeText>Loading...</AvgResTimeText>
-              ) : (
-                <>
-                  <AvgResTimeDoughnutWrapper>
-                    <Doughnut data={avgResTimeDoughnutData} options={avgResTimeDoughnutOptions} />
-                  </AvgResTimeDoughnutWrapper>
-                  <AvgResTimeText>{averageResolutionTime || 'N/A'}</AvgResTimeText>
-                </>
-              )}
-            </AvgResTimeCardContent>
-          </Card>
-          <Card>
-            <CardTitle><FiAlertCircle /> Volume by Status</CardTitle>
-            {loading && ticketsByStatus.length === 0 ? (<NoDataMessage>Loading chart...</NoDataMessage>)
-              : ticketsByStatus.length > 0 && ticketsByStatus.some(s => s.ticket_count > 0) ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%' }}> 
-                  <div style={{ width: '350px', height: '350px' }}> 
-                    <Doughnut ref={ticketsByStatusChartRef} data={ticketsByStatusChartData} options={ticketsByStatusChartOptions} onClick={(event) => handleChartClick(event, ticketsByStatusChartRef, 'volumeByStatus')} />
+          <ChartSection>
+            <Card>
+              <CardTitle><FiClock /> Avg. Resolution Time</CardTitle>
+              <AvgResTimeCardContent>
+                {loading && !averageResolutionTime ? (
+                  <AvgResTimeText>Loading...</AvgResTimeText>
+                ) : (
+                  <>
+                    <AvgResTimeDoughnutWrapper>
+                      <Doughnut data={avgResTimeDoughnutData} options={avgResTimeDoughnutOptions} />
+                    </AvgResTimeDoughnutWrapper>
+                    <AvgResTimeText>{averageResolutionTime || 'N/A'}</AvgResTimeText>
+                  </>
+                )}
+              </AvgResTimeCardContent>
+            </Card>
+            <Card>
+              <CardTitle><FiAlertCircle /> Volume by Status</CardTitle>
+              {loading && ticketsByStatus.length === 0 ? (<NoDataMessage>Loading chart...</NoDataMessage>)
+                : ticketsByStatus.length > 0 && ticketsByStatus.some(s => s.ticket_count > 0) ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '100%' }}>
+                    <div style={{ width: '350px', height: '350px' }}>
+                      <Doughnut ref={ticketsByStatusChartRef} data={ticketsByStatusChartData} options={ticketsByStatusChartOptions} onClick={(event) => handleChartClick(event, ticketsByStatusChartRef, 'volumeByStatus')} />
+                    </div>
                   </div>
-                </div>
-              ) : (<NoDataMessage>No data for Volume by Status.</NoDataMessage>)}
-          </Card>
-        </ChartSection>
+                ) : (<NoDataMessage>No data for Volume by Status.</NoDataMessage>)}
+            </Card>
+          </ChartSection>
 
-        <ChartSection>
-          <Card>
-            <CardTitle><FiBarChart2 /> Tickets Resolved</CardTitle>
-            {loading && resolvedTickets.length === 0 ? (<NoDataMessage>Loading chart...</NoDataMessage>)
-              : resolvedTickets.length > 0 && (parseInt(resolvedTickets[0]?.resolved_count || '0') > 0 || parseInt(resolvedTickets[0]?.unresolved_count || '0') > 0) ? (
-                <Bar ref={ticketsResolvedChartRef} data={barData} options={customChartOptions} onClick={(event) => handleChartClick(event, ticketsResolvedChartRef, 'ticketsResolved')} />
-              ) : (<NoDataMessage>No data for Tickets Resolved.</NoDataMessage>)}
-          </Card>
-          <Card>
-            <CardTitle><FiUserCheck /> SLA Compliance</CardTitle>
-            {loading && slaComplianceData.length === 0 ? (<NoDataMessage>Loading SLA data...</NoDataMessage>)
-              : slaComplianceData.length > 0 && slaComplianceData[0].total_tickets > 0 ? (
-                <>
-                  <StyledDoughnutWrapper>
-                    <Doughnut ref={slaComplianceChartRef} data={slaDoughnutData} options={slaDoughnutOptions} onClick={(event) => handleChartClick(event, slaComplianceChartRef, 'slaCompliance')} />
-                  </StyledDoughnutWrapper>
-                  <StyledParagraph2>{slaComplianceData[0].sla_percent}% Compliance</StyledParagraph2>
-                </>
-              ) : (<NoDataMessage>No SLA data available.</NoDataMessage>)}
-          </Card>
-        </ChartSection>
+          <ChartSection>
+            <Card>
+              <CardTitle><FiBarChart2 /> Tickets Resolved</CardTitle>
+              {loading && resolvedTickets.length === 0 ? (<NoDataMessage>Loading chart...</NoDataMessage>)
+                : resolvedTickets.length > 0 && (parseInt(resolvedTickets[0]?.resolved_count || '0') > 0 || parseInt(resolvedTickets[0]?.unresolved_count || '0') > 0) ? (
+                  <Bar ref={ticketsResolvedChartRef} data={barData} options={customChartOptions} onClick={(event) => handleChartClick(event, ticketsResolvedChartRef, 'ticketsResolved')} />
+                ) : (<NoDataMessage>No data for Tickets Resolved.</NoDataMessage>)}
+            </Card>
+            <Card>
+              <CardTitle><FiUserCheck /> SLA Compliance</CardTitle>
+              {loading && slaComplianceData.length === 0 ? (<NoDataMessage>Loading SLA data...</NoDataMessage>)
+                : slaComplianceData.length > 0 && slaComplianceData[0].total_tickets > 0 ? (
+                  <>
+                    <StyledDoughnutWrapper>
+                      <Doughnut ref={slaComplianceChartRef} data={slaDoughnutData} options={slaDoughnutOptions} onClick={(event) => handleChartClick(event, slaComplianceChartRef, 'slaCompliance')} />
+                    </StyledDoughnutWrapper>
+                    <StyledParagraph2>{slaComplianceData[0].sla_percent}% Compliance</StyledParagraph2>
+                  </>
+                ) : (<NoDataMessage>No SLA data available.</NoDataMessage>)}
+            </Card>
+          </ChartSection>
 
-        <FullWidthCard>
-          <CardTitle><FiBarChart2 /> Tickets Created Over Time</CardTitle>
-          <div style={{ position: 'relative', height: 'calc(100% - 40px)' }}> 
-            {loading && ticketsOverTime.labels.length === 0 ? ( 
-              <NoDataMessage>Loading chart...</NoDataMessage>
-            ) : ticketsOverTime.labels.length > 0 ? (
-              <Line
-                ref={ticketsOverTimeChartRef}
-                data={ticketsOverTime} 
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'top',
-                      labels: {
-                        color: '#e0e0e0',
-                        font: {
-                          family: "'Orbitron', sans-serif",
-                          size: 12
-                        },
-                        padding: 15
-                      }
-                    },
-                    datalabels: { 
-                      display: false 
-                    }
-                  },
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
+          <FullWidthCard>
+            <CardTitle><FiBarChart2 /> Tickets Created Over Time</CardTitle>
+            <div style={{ position: 'relative', height: 'calc(100% - 40px)' }}>
+              {loading && ticketsOverTime.labels.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+              ) : ticketsOverTime.labels.length > 0 ? (
+                <Line
+                  ref={ticketsOverTimeChartRef}
+                  data={ticketsOverTime}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'top',
+                        labels: {
+                          color: '#e0e0e0',
+                          font: {
+                            family: "'Orbitron', sans-serif",
+                            size: 12
+                          },
+                          padding: 15
+                        }
                       },
-                      ticks: {
-                        color: '#e0e0e0',
-                        font: {
-                          family: "'Orbitron', sans-serif",
-                          size: 12
-                        },
-                        padding: 10,
-                        stepSize: Math.max(1, ...ticketsOverTime.datasets[0].data) > 10 ? undefined : 1 
+                      datalabels: {
+                        display: false
                       }
                     },
-                    x: {
-                      grid: {
-                        color: 'rgba(255, 255, 255, 0.1)'
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        grid: {
+                          color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                          color: '#e0e0e0',
+                          font: {
+                            family: "'Orbitron', sans-serif",
+                            size: 12
+                          },
+                          padding: 10,
+                          stepSize: Math.max(1, ...ticketsOverTime.datasets[0].data) > 10 ? undefined : 1
+                        }
                       },
-                      ticks: {
-                        color: '#e0e0e0',
-                        font: {
-                          family: "'Orbitron', sans-serif",
-                          size: 12
+                      x: {
+                        grid: {
+                          color: 'rgba(255, 255, 255, 0.1)'
                         },
-                        padding: 10
+                        ticks: {
+                          color: '#e0e0e0',
+                          font: {
+                            family: "'Orbitron', sans-serif",
+                            size: 12
+                          },
+                          padding: 10
+                        }
+                      }
+                    },
+                    interaction: {
+                      mode: 'nearest',
+                      axis: 'x',
+                      intersect: false
+                    },
+                    elements: {
+                      point: {
+                        radius: 4,
+                        hoverRadius: 6
+                      },
+                      line: {
+                        borderWidth: 2
                       }
                     }
-                  },
-                  interaction: {
-                    mode: 'nearest', 
-                    axis: 'x',
-                    intersect: false 
-                  },
-                  elements: {
-                    point: {
-                      radius: 4,
-                      hoverRadius: 6
-                    },
-                    line: {
-                      borderWidth: 2
-                    }
-                  }
-                }}
-                onClick={handleTicketsOverTimeClick} 
-              />
-            ) : (
-              <NoDataMessage>No data available for tickets created over time.</NoDataMessage>
-            )}
-          </div>
-        </FullWidthCard>
-      </Content>
+                  }}
+                  onClick={handleTicketsOverTimeClick}
+                />
+              ) : (
+                <NoDataMessage>No data available for tickets created over time.</NoDataMessage>
+              )}
+            </div>
+          </FullWidthCard>
+        </Content>
 
-      {isDrillDownModalOpen && (
-        <DrillDownModalOverlay onClick={closeDrillDownModal}>
-          <DrillDownModalContent onClick={(e) => e.stopPropagation()}>
-            <ModalHeader>
-              <ModalTitle>{drillDownTitle}</ModalTitle>
-                <ModalHeaderActions> 
+        {isDrillDownModalOpen && (
+          <DrillDownModalOverlay onClick={closeDrillDownModal}>
+            <DrillDownModalContent onClick={(e) => e.stopPropagation()}>
+              <ModalHeader>
+                <ModalTitle>{drillDownTitle}</ModalTitle>
+                <ModalHeaderActions>
                   {drillDownTickets.length > 0 && !isDrillDownLoading && (
                     <ExportButton onClick={handleDrillDownExport}>
                       <FiDownload />
                       Export
                     </ExportButton>
                   )}
-                <CloseModalButton onClick={closeDrillDownModal}><FiX size={24} /></CloseModalButton>
-              </ModalHeaderActions>
-            </ModalHeader>
-            <TableContainer>
-              {isDrillDownLoading ? (<NoDataMessageModal>Loading tickets...</NoDataMessageModal>)
-                : drillDownTickets.length > 0 ? (
-                  <StyledTable>
-                    <thead><tr><th>Ticket ID</th><th>Description</th><th>Status</th><th>Priority</th><th>Created</th><th>Updated</th><th>Submitted By</th><th>Assigned To</th><th>Closed</th><th>Resolved</th><th>SLA (Hrs)</th><th>Deadline</th><th>Within SLA</th></tr></thead>
-                    <tbody>
-                      {drillDownTickets.map((ticket) => (
-                        <tr key={ticket.id}>
-                          <td>{`${ticket.id}`}</td><td>{ticket.description}</td><td>{ticket.status}</td><td><PriorityPill priority={ticket.priority}>{ticket.priority}</PriorityPill></td><td>{ticket.createdAt}</td><td>{ticket.updatedAt}</td><td>{ticket.submittedBy}</td><td>{ticket.assignedTo}</td><td>{ticket.closeDate || 'N/A'}</td><td>{ticket.resolveDate || 'N/A'}</td><td>{ticket.slaHours}</td><td>{ticket.deadline}</td><td><WithinSLAPill $within={ticket.withinSla === 'Yes' || ticket.withinSla === 'yes'}>{ticket.withinSla}</WithinSLAPill></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </StyledTable>
-                ) : (<NoDataMessageModal>No ticket data available for this selection.</NoDataMessageModal>)}
-            </TableContainer>
-          </DrillDownModalContent>
-        </DrillDownModalOverlay>
-      )}
-    </Wrapper>
+                  <CloseModalButton onClick={closeDrillDownModal}><FiX size={24} /></CloseModalButton>
+                </ModalHeaderActions>
+              </ModalHeader>
+              <TableContainer>
+                {isDrillDownLoading ? (<NoDataMessageModal>Loading tickets...</NoDataMessageModal>)
+                  : drillDownTickets.length > 0 ? (
+                    <StyledTable>
+                      <thead><tr><th>Ticket ID</th><th>Description</th><th>Status</th><th>Priority</th><th>Created</th><th>Updated</th><th>Submitted By</th><th>Assigned To</th><th>Closed</th><th>Resolved</th><th>SLA (Hrs)</th><th>Deadline</th><th>Within SLA</th></tr></thead>
+                      <tbody>
+                        {drillDownTickets.map((ticket) => (
+                          <tr key={ticket.id}>
+                            <td>{`${ticket.id}`}</td><td>{ticket.description}</td><td>{ticket.status}</td><td><PriorityPill priority={ticket.priority}>{ticket.priority}</PriorityPill></td><td>{ticket.createdAt}</td><td>{ticket.updatedAt}</td><td>{ticket.submittedBy}</td><td>{ticket.assignedTo}</td><td>{ticket.closeDate || 'N/A'}</td><td>{ticket.resolveDate || 'N/A'}</td><td>{ticket.slaHours}</td><td>{ticket.deadline}</td><td><WithinSLAPill $within={ticket.withinSla === 'Yes' || ticket.withinSla === 'yes'}>{ticket.withinSla}</WithinSLAPill></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </StyledTable>
+                  ) : (<NoDataMessageModal>No ticket data available for this selection.</NoDataMessageModal>)}
+              </TableContainer>
+            </DrillDownModalContent>
+          </DrillDownModalOverlay>
+        )}
+      </Wrapper>
+    </ProtectedRoute>
   );
 };
 
@@ -1305,23 +1321,23 @@ const PriorityPill = styled.span<{ priority: string }>`
   box-sizing: border-box;  
 
   background-color: ${({ priority }) => {
-    const p = priority ? priority.toLowerCase() : 'unknown'; 
+    const p = priority ? priority.toLowerCase() : 'unknown';
     switch (p) {
       case 'critical':
-        return '#650213'; 
+        return '#650213';
       case 'high':
-        return '#ff4d4d'; 
+        return '#ff4d4d';
       case 'medium':
-        return '#f5a623'; 
+        return '#f5a623';
       case 'low':
         return '#27ae60';
       default:
-        return '#555';   
+        return '#555';
     }
   }};
 
   /* Conditional text color for medium priority for better contrast against #f5a623 */
-  ${({ priority }) => 
+  ${({ priority }) =>
     priority && priority.toLowerCase() === 'medium' ? 'color: #fff;' : 'color: #fff;'
   }
 `;
@@ -1461,7 +1477,7 @@ const Sidebar = styled.div<{ $isOpen: boolean }>`
   padding-top: 20px;
   gap: 15px;
   box-shadow: ${({ $isOpen }) =>
-        $isOpen ? '4px 0px 10px rgba(0, 0, 0, 0.1)' : 'none'};
+    $isOpen ? '4px 0px 10px rgba(0, 0, 0, 0.1)' : 'none'};
   transition: transform 0.4s ease-in-out;
   transform: ${({ $isOpen }) => ($isOpen ? 'translateX(0)' : 'translateX(-100%)')};
   z-index: 10; /* Ensure sidebar is above background but below modal */

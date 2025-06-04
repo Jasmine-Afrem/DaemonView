@@ -1,25 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { FiX } from 'react-icons/fi';
 import { Ticket } from '../page';
-import { useEffect } from 'react';
-
-const statusOptions = ['Open', 'In_Progress', 'Resolved', 'Closed'];
 
 interface EditTicketModalProps {
   ticket: Ticket;
   onClose: () => void;
-  onSave: (updated: Partial<Ticket>) => void;
+  onSave: (updated: Partial<Ticket> & { notes?: string }) => void;
 }
+
+const MASTER_STATUS_VALUES = ['Open', 'In_Progress', 'Resolved', 'Closed'];
+
+const getCanonicalStatus = (inputStatus: string): string => {
+  if (!inputStatus) return MASTER_STATUS_VALUES[0];
+  const normalizedInput = inputStatus.trim().toLowerCase().replace(/ /g, '_');
+  const found = MASTER_STATUS_VALUES.find(
+    masterValue => masterValue.trim().toLowerCase().replace(/ /g, '_') === normalizedInput
+  );
+  return found || inputStatus;
+};
 
 const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSave }) => {
   if (!ticket || !ticket.ticket_id) return null;
-  const [status, setStatus] = useState(ticket.status);
+
+  const initialTicketStatus = getCanonicalStatus(ticket.status);
+
+  const getOtherAllowedTransitionStatuses = (currentCanonStatus: string): string[] => {
+    let nextStatuses: string[] = [];
+
+    switch (currentCanonStatus) {
+      case 'Open':
+        nextStatuses = ['In_Progress', 'Resolved', 'Closed'];
+        break;
+      case 'In_Progress':
+        nextStatuses = ['Resolved', 'Closed'];
+        break;
+      case 'Resolved':
+        nextStatuses = ['In_Progress', 'Closed'];
+        break;
+      default:
+        console.warn(`Unknown/default ticket status for transitions: ${currentCanonStatus}. Allowing all others.`);
+        nextStatuses = MASTER_STATUS_VALUES.filter(s => s !== currentCanonStatus);
+    }
+    return nextStatuses;
+  };
+
+  const possibleTransitions = getOtherAllowedTransitionStatuses(initialTicketStatus);
+
+  let optionsForDropdown: string[];
+  let initialSelectValueForDropdown: string;
+
+  optionsForDropdown = Array.from(new Set([initialTicketStatus, ...possibleTransitions]));
+  initialSelectValueForDropdown = initialTicketStatus;
+
+
+  const [status, setStatus] = useState(initialSelectValueForDropdown);
   const [assignedTo, setAssignedTo] = useState(ticket.assigned_to || '');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!ticket?.ticket_id) return;
     const fetchNotes = async () => {
       try {
         const res = await fetch(`http://localhost:8080/api/get-notes/${ticket.ticket_id}`);
@@ -30,9 +69,8 @@ const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSa
         console.error('Error fetching notes:', err);
       }
     };
-
     fetchNotes();
-  }, [ticket?.ticket_id]);
+  }, [ticket.ticket_id]);
 
   const handleSubmit = () => {
     onSave({
@@ -44,30 +82,26 @@ const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSa
     onClose();
   };
 
-  const statusOrder = ['Open', 'In_Progress', 'Resolved', 'Closed'];
-  const normalizedStatus = ticket.status.replace(/ /g, '_');
-  const currentStatusIndex = statusOrder.findIndex(s => s.toLowerCase() === normalizedStatus.toLowerCase());
-  const allowedStatuses = statusOrder.slice(currentStatusIndex);
+  const getDisplayStatusText = (canonicalValue: string): string => {
+    return canonicalValue.replace(/_/g, ' ');
+  };
 
   return (
     <Overlay>
       <Modal>
         <Header>
-          <h3>Edit Ticket</h3>
+          <h3>Edit Ticket {ticket.ticket_id}</h3>
           <FiX onClick={onClose} style={{ cursor: 'pointer' }} />
         </Header>
         <Label>
-          <Label>
-            Status:
-            <StyledSelect value={status} onChange={(e) => setStatus(e.target.value)}>
-              {allowedStatuses.map((s, idx) => (
-                <option key={idx} value={s}>
-                  {s}
-                </option>
-              ))}
-            </StyledSelect>
-          </Label>
-
+          Status:
+          <StyledSelect value={status} onChange={(e) => setStatus(e.target.value)}>
+            {optionsForDropdown.map((canonicalOptValue, idx) => (
+              <option key={idx} value={canonicalOptValue}>
+                {getDisplayStatusText(canonicalOptValue)}
+              </option>
+            ))}
+          </StyledSelect>
         </Label>
 
         <Label>
@@ -80,6 +114,7 @@ const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSa
             rows={4}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add or update notes..."
           />
         </Label>
 
@@ -91,7 +126,6 @@ const EditTicketModal: React.FC<EditTicketModalProps> = ({ ticket, onClose, onSa
 
 export default EditTicketModal;
 
-// Styled Components
 const Overlay = styled.div`
   position: fixed;
   top: 0;

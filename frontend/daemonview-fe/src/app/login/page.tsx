@@ -5,6 +5,8 @@ import { useEffect } from 'react';
 import React, {useState} from 'react';
 import { useRouter } from 'next/navigation';
 import { useLoading } from '../context/LoadingContext';
+import { useAuth } from '../context/AuthContext';
+
 
 const Container = styled.div`
   display: flex;
@@ -166,28 +168,35 @@ const Footer = styled.footer`
   z-index: 1;
 `;
 
-const LoginForm: React.FC = () => {
+  const LoginForm: React.FC = () => {
   const router = useRouter();
   const { setLoading } = useLoading();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  const auth = useAuth();
+
   useEffect(() => {
-    fetch('http://localhost:8080/api/check-auth', {
-      credentials: 'include'
-    })
-      .then(res => {
-        if (res.ok) {
-          router.push('/dashboard');
-        }
-      });
-  }, []);
+    setLoading(auth.loading);
+    if (!auth?.loading) {
+      if (auth?.user) {
+        router.push('/dashboard');
+      }
+    }
+  }, [auth?.user, auth?.loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
+    if (!auth) {
+      setError('Authentication service is not available. Please try again.');
+      return;
+    }
+
+    setLoading(true);
+
     try {
       const res = await fetch('http://localhost:8080/api/login', {
         method: 'POST',
@@ -201,15 +210,14 @@ const LoginForm: React.FC = () => {
       const data = await res.json();
 
       if (res.ok) {
-        setLoading(true); // Show loading
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setLoading(false); // Hide loading after 1 second
-        router.push('/dashboard');
+        auth.login(data);
       } else {
         setError(data.message || 'Login failed');
       }
     } catch (err) {
       setError('Failed to connect to server');
+    } finally {
+      setLoading(false);
     }
   };
 

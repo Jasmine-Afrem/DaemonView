@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useEffect } from 'react';
+import { useLoading } from '../context/LoadingContext';
 
 import styled from 'styled-components';
 import {
@@ -29,6 +30,8 @@ import {
 } from 'react-icons/fi';
 import '../globals.css';
 import EditTicketModal from './components/EditModal';
+import ProtectedRoute from '../components/ProtectedRoute'
+import { useAuth } from '../context/AuthContext';
 
 export type Ticket = {
   ticket_id: string;
@@ -72,13 +75,25 @@ const DaemonView = () => {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [successPopupVisible, setSuccessPopupVisible] = useState(false);
+  const auth = useAuth();
 
   const sidebarIcons = [
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
     { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
     { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
-    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator')},
+    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator') },
   ];
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('http://localhost:8080/api/me', { method: 'GET', credentials: 'include' });
+        if (res.ok) { const data = await res.json(); setUsername(auth.user?.username || ""); }
+        else { router.push('/login'); }
+      } catch (err) { console.error('Auth check failed', err); router.push('/login'); }
+    };
+    fetchUser();
+  }, [router]);
 
   useEffect(() => {
     setFilterValue('');
@@ -364,343 +379,324 @@ const DaemonView = () => {
     'Submitted_By'
   ];
 
-  const handleLogout = async () => {
-    try {
-      await fetch('http://localhost:8080/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
+  const { setLoading } = useLoading();
 
-      router.push('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+  const handleLogout = async () => {
+    if (!auth) return;
+
+    setLoading(true);
+
+    setTimeout(() => {
+      auth.logout();
+    }, 1000);
   };
+
 
   const handleProfileClick = () => {
     router.push('/dashboard/profile');
   };
 
   const handleInfoClick = (ticket: Ticket) => {
-    if (ticket.status !== 'closed' && ticket.assigned_to === username) {
+    if (ticket.status !== 'closed' && (ticket.assigned_to === username || auth.user?.role === 'admin')) {
       setSelectedTicket(ticket);
       setShowEditModal(true);
     } else {
-      alert('You can only edit tickets assigned to you.');
+      alert('You can only edit tickets assigned to you or if you are an admin.');
     }
-
   };
 
-  {
-    useEffect(() => {
-      const fetchUser = async () => {
-        try {
-          const res = await fetch('http://localhost:8080/api/check-auth', {
-            method: 'GET',
-            credentials: 'include'
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            setUsername(data.user.username);
-          }
-          else {
-            router.push('/login')
-          }
-        }
-        catch (err) {
-          console.error('Auth check failed', err);
-          router.push('/login')
-        }
-      };
-
-      fetchUser();
-    })
-  }
-
   return (
-    <Container>
-      {/* sidebar is conditionally rendered based on sidebarOpen state */}
-      <Sidebar $isOpen={sidebarOpen}>
-        {sidebarIcons.map(({ icon, label, onClick }, idx) => (
-          <SidebarButton key={idx} title={label} onClick={onClick}>
-            {icon}
-          </SidebarButton>
-        ))}
-      </Sidebar>
+    <ProtectedRoute>
+      <Container>
+        {/* sidebar is conditionally rendered based on sidebarOpen state */}
+        <Sidebar $isOpen={sidebarOpen}>
+          {sidebarIcons
+            .filter(({ label }) => {
+              if (label === 'Account Admin' && auth.user?.role !== 'admin') return false;
+              return true;
+            })
+            .map(({ icon, label, onClick }, idx) => (
+              <SidebarButton key={idx} title={label} onClick={onClick}>
+                {icon}
+              </SidebarButton>
+            ))}
 
-      {/* main content area */}
-      <Content $isSidebarOpen={sidebarOpen}>
-        <Header>
-          <LeftHeader>
-            {/* button to toggle sidebar open/close */}
-            <SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
-              {/* conditionally render the close or menu icon based on sidebarOpen state */}
-              {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
-            </SidebarToggle>
-          </LeftHeader>
+        </Sidebar>
 
-          {/* title image */}
-          <TitleImage src="/images/daemonview.png" alt="DaemonView" />
+        {/* main content area */}
+        <Content $isSidebarOpen={sidebarOpen}>
+          <Header>
+            <LeftHeader>
+              {/* button to toggle sidebar open/close */}
+              <SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
+                {/* conditionally render the close or menu icon based on sidebarOpen state */}
+                {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
+              </SidebarToggle>
+            </LeftHeader>
 
-          {/* user area showing user profile icon and username */}
-          <UserArea>
-            <ProfileIcon onClick={handleProfileClick} /> {username}
-            <LogoutIcon onClick={handleLogout} />
-          </UserArea>
-        </Header>
+            {/* title image */}
+            <TitleImage src="/images/daemonview.png" alt="DaemonView" />
 
-        {/* table section */}
-        <TableSection>
-          <TableHeader>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-              <RefreshButton onClick={() => handlePageChange(currentPage)}>
-                <FiRefreshCcw size={16} /> Refresh
-              </RefreshButton>
-              {appliedFilters.size > 0 && (
-                <AppliedFilters>
-                  {Array.from(appliedFilters.keys()).map((filterKey, idx) => (
-                    <FilterTag key={idx}>
-                      {filterKey}
-                      <FilterTagX onClick={() => handleRemoveFilter(filterKey)} />
-                    </FilterTag>
-                  ))}
-                </AppliedFilters>
-              )}
-            </div>
+            {/* user area showing user profile icon and username */}
+            <UserArea>
+              <ProfileIcon onClick={handleProfileClick} /> {username}
+              <LogoutIcon onClick={handleLogout} />
+            </UserArea>
+          </Header>
 
-            <FilterWrapper>
-              <TableActions
-                onClick={() => {
-                  if (showFilterPopup) {
-                    closePopup();
-                  } else {
-                    setShowFilterPopup(true);
-                  }
-                }}
-              >
-                <FiFilter />
-              </TableActions>
-              {showFilterPopup && (
-                <FilterPopup
-                  $isClosing={isClosingPopup}
-                  onClick={(e) => e.stopPropagation()}
+          {/* table section */}
+          <TableSection>
+            <TableHeader>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                <RefreshButton onClick={() => handlePageChange(currentPage)}>
+                  <FiRefreshCcw size={16} /> Refresh
+                </RefreshButton>
+                {appliedFilters.size > 0 && (
+                  <AppliedFilters>
+                    {Array.from(appliedFilters.keys()).map((filterKey, idx) => (
+                      <FilterTag key={idx}>
+                        {filterKey}
+                        <FilterTagX onClick={() => handleRemoveFilter(filterKey)} />
+                      </FilterTag>
+                    ))}
+                  </AppliedFilters>
+                )}
+              </div>
+
+              <FilterWrapper>
+                <TableActions
+                  onClick={() => {
+                    if (showFilterPopup) {
+                      closePopup();
+                    } else {
+                      setShowFilterPopup(true);
+                    }
+                  }}
                 >
-                  <h4>Filter Options</h4>
-                  <label className={selectedColumn ? 'active' : ''}>
-                    Column:
-                    <select
-                      value={selectedColumn}
-                      onChange={(e) => setSelectedColumn(e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <option value="" disabled>Select column</option>
-                      {selectColumns.map((header, idx) => (
-                        <option key={idx} value={header}>{header}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {/* Status filter */}
-                  {selectedColumn === 'Status' && (
-                    <label className={filterValue ? 'active' : ''}>
-                      Status:
-                      <select
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <option value="" disabled>Select status</option>
-                        {statusOptions.map((status, idx) => (
-                          <option key={idx} value={status}>{status}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
-                  {/* Priority filter */}
-                  {selectedColumn === 'Priority' && (
-                    <label className={filterValue ? 'active' : ''}>
-                      Priority:
-                      <select
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <option value="" disabled>Select priority</option>
-                        {priorityOptions.map((priority, idx) => (
-                          <option key={idx} value={priority}>{priority}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
-                  {/* Created At filter */}
-                  {selectedColumn === 'Created_At' && (
-                    <label className={filterDate ? 'active' : ''}>
-                      Created At:
-                      <input
-                        type="date"
-                        value={filterDate || ''}
-                        onChange={(e) => setFilterDate(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        max={new Date().toISOString().split('T')[0]}
-                      />
-                    </label>
-                  )}
-
-                  {/* Submitted By filter */}
-                  {selectedColumn === 'Submitted_By' && (
-                    <label className={filterValue ? 'active' : ''}>
-                      Submitted By:
-                      <input
-                        type="text"
-                        placeholder="Enter name"
-                        value={filterValue}
-                        onChange={(e) => setFilterValue(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </label>
-                  )}
-
-                  <button
-                    disabled={!selectedColumn || (!filterValue && !filterDate)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleApplyFilter();
-                    }}
+                  <FiFilter />
+                </TableActions>
+                {showFilterPopup && (
+                  <FilterPopup
+                    $isClosing={isClosingPopup}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    Apply
-                  </button>
-                </FilterPopup>
-              )}
-            </FilterWrapper>
-          </TableHeader>
+                    <h4>Filter Options</h4>
+                    <label className={selectedColumn ? 'active' : ''}>
+                      Column:
+                      <select
+                        value={selectedColumn}
+                        onChange={(e) => setSelectedColumn(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <option value="" disabled>Select column</option>
+                        {selectColumns.map((header, idx) => (
+                          <option key={idx} value={header}>{header}</option>
+                        ))}
+                      </select>
+                    </label>
 
-          <TableContainer>
-            <Table>
-              <thead>
-                <tr>
-                  {tableHeaders.map((header, idx) => (
-                    <th key={`col-${idx}`}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket, idx) => (
-                  <tr key={`ticket-${idx}`}>
-                    <td>
-                      {ticket.status !== 'closed' && ticket.assigned_to === username ? (
-                        <FiEdit
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => handleInfoClick(ticket)}
-                        />
-                      ) : (
-                        <FiEdit
-                          style={{
-                            opacity: 0.3,
-                            cursor: 'not-allowed'
-                          }}
-                          title="Not editable"
-                        />
-                      )}
-                    </td>
+                    {/* Status filter */}
+                    {selectedColumn === 'Status' && (
+                      <label className={filterValue ? 'active' : ''}>
+                        Status:
+                        <select
+                          value={filterValue}
+                          onChange={(e) => setFilterValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="" disabled>Select status</option>
+                          {statusOptions.map((status, idx) => (
+                            <option key={idx} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
 
-                    <td>{ticket.ticket_id || 'No ID'}</td>
-                    <td>{ticket.description || 'No Description'}</td>
-                    <td>{ticket.status || 'No Status'}</td>
-                    <td>
-                      {ticket.priority ? (
-                        <PriorityBadge level={ticket.priority}>
-                          {ticket.priority}
-                        </PriorityBadge>
-                      ) : (
-                        <PriorityBadge level="unknown">Not Set</PriorityBadge>
-                      )}
-                    </td>
-                    <td>{ticket.created_at ? ticket.created_at.toLocaleString() : 'N/A'}</td>
-                    <td>{ticket.updated_at ? ticket.updated_at.toLocaleString() : 'N/A'}</td>
-                    <td>{ticket.submitted_by || 'Anonymous'}</td>
-                    <td>{ticket.assigned_to || 'Unassigned'}</td>
-                    <td>{ticket.close_date ? ticket.close_date.toLocaleString() : 'Not Closed'}</td>
-                    <td>{ticket.completed_date ? ticket.completed_date.toLocaleString() : 'Incomplete'}</td>
-                    <td>{ticket.sla_hours} hrs</td>
-                    <td>{ticket.deadline ? ticket.deadline.toLocaleString() : 'No Deadline'}</td>
-                    <td>
-                      {ticket.within_sla ? (
-                        <SLAStatusBadge status="within">Yes</SLAStatusBadge>
-                      ) : (
-                        <SLAStatusBadge status="expired">No</SLAStatusBadge>
-                      )}
-                    </td>
-                    <td>{ticket.related_incidents || 'No Related Incident'}</td>
-                    <td>{ticket.related_devices || 'No Device Name'}</td>
+                    {/* Priority filter */}
+                    {selectedColumn === 'Priority' && (
+                      <label className={filterValue ? 'active' : ''}>
+                        Priority:
+                        <select
+                          value={filterValue}
+                          onChange={(e) => setFilterValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="" disabled>Select priority</option>
+                          {priorityOptions.map((priority, idx) => (
+                            <option key={idx} value={priority}>{priority}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    {/* Created At filter */}
+                    {selectedColumn === 'Created_At' && (
+                      <label className={filterDate ? 'active' : ''}>
+                        Created At:
+                        <input
+                          type="date"
+                          value={filterDate || ''}
+                          onChange={(e) => setFilterDate(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          max={new Date().toISOString().split('T')[0]}
+                        />
+                      </label>
+                    )}
+
+                    {/* Submitted By filter */}
+                    {selectedColumn === 'Submitted_By' && (
+                      <label className={filterValue ? 'active' : ''}>
+                        Submitted By:
+                        <input
+                          type="text"
+                          placeholder="Enter name"
+                          value={filterValue}
+                          onChange={(e) => setFilterValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </label>
+                    )}
+
+                    <button
+                      disabled={!selectedColumn || (!filterValue && !filterDate)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApplyFilter();
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </FilterPopup>
+                )}
+              </FilterWrapper>
+            </TableHeader>
+
+            <TableContainer>
+              <Table>
+                <thead>
+                  <tr>
+                    {tableHeaders.map((header, idx) => (
+                      <th key={`col-${idx}`}>{header}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableContainer>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket, idx) => (
+                    <tr key={`ticket-${idx}`}>
+                      <td>
+                        {ticket.status !== 'closed' && (ticket.assigned_to === username || auth.user?.role === 'admin') ? (
+                          <FiEdit
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleInfoClick(ticket)}
+                          />
+                        ) : (
+                          <FiEdit
+                            style={{
+                              opacity: 0.3,
+                              cursor: 'not-allowed'
+                            }}
+                            title="Not editable"
+                          />
+                        )}
 
-          <StyledPagination>
-            <PageNavButton
-              disabled={currentPage <= 1}
-              onClick={() => handlePageChange(currentPage - 1)}
-            >
-              ←
-            </PageNavButton>
-            <PageNumberButton
-              $active={currentPage === 1}
-              onClick={() => handlePageChange(1)}
-            >
-              1
-            </PageNumberButton>
-            {currentPage > 3 && <span>...</span>}
-            {Array.from({ length: 3 }, (_, i) => currentPage - 1 + i)
-              .filter((page) => page > 1 && page < totalPages)
-              .map((page) => (
-                <PageNumberButton
-                  key={page}
-                  $active={page === currentPage}
-                  onClick={() => handlePageChange(page)}
-                >
-                  {page}
-                </PageNumberButton>
-              ))}
-            {currentPage < totalPages - 2 && <span>...</span>}
-            {totalPages > 1 && (
-              <PageNumberButton
-                $active={currentPage === totalPages}
-                onClick={() => handlePageChange(totalPages)}
+                      </td>
+
+                      <td>{ticket.ticket_id || 'No ID'}</td>
+                      <td>{ticket.description || 'No Description'}</td>
+                      <td>{ticket.status || 'No Status'}</td>
+                      <td>
+                        {ticket.priority ? (
+                          <PriorityBadge level={ticket.priority}>
+                            {ticket.priority}
+                          </PriorityBadge>
+                        ) : (
+                          <PriorityBadge level="unknown">Not Set</PriorityBadge>
+                        )}
+                      </td>
+                      <td>{ticket.created_at ? ticket.created_at.toLocaleString() : 'N/A'}</td>
+                      <td>{ticket.updated_at ? ticket.updated_at.toLocaleString() : 'N/A'}</td>
+                      <td>{ticket.submitted_by || 'Anonymous'}</td>
+                      <td>{ticket.assigned_to || 'Unassigned'}</td>
+                      <td>{ticket.close_date ? ticket.close_date.toLocaleString() : 'Not Closed'}</td>
+                      <td>{ticket.completed_date ? ticket.completed_date.toLocaleString() : 'Incomplete'}</td>
+                      <td>{ticket.sla_hours} hrs</td>
+                      <td>{ticket.deadline ? ticket.deadline.toLocaleString() : 'No Deadline'}</td>
+                      <td>
+                        {ticket.within_sla ? (
+                          <SLAStatusBadge status="within">Yes</SLAStatusBadge>
+                        ) : (
+                          <SLAStatusBadge status="expired">No</SLAStatusBadge>
+                        )}
+                      </td>
+                      <td>{ticket.related_incidents || 'No Related Incident'}</td>
+                      <td>{ticket.related_devices || 'No Device Name'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableContainer>
+
+            <StyledPagination>
+              <PageNavButton
+                disabled={currentPage <= 1}
+                onClick={() => handlePageChange(currentPage - 1)}
               >
-                {totalPages}
+                ←
+              </PageNavButton>
+              <PageNumberButton
+                $active={currentPage === 1}
+                onClick={() => handlePageChange(1)}
+              >
+                1
               </PageNumberButton>
-            )}
+              {currentPage > 3 && <span>...</span>}
+              {Array.from({ length: 3 }, (_, i) => currentPage - 1 + i)
+                .filter((page) => page > 1 && page < totalPages)
+                .map((page) => (
+                  <PageNumberButton
+                    key={page}
+                    $active={page === currentPage}
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </PageNumberButton>
+                ))}
+              {currentPage < totalPages - 2 && <span>...</span>}
+              {totalPages > 1 && (
+                <PageNumberButton
+                  $active={currentPage === totalPages}
+                  onClick={() => handlePageChange(totalPages)}
+                >
+                  {totalPages}
+                </PageNumberButton>
+              )}
 
-            <PageNavButton
-              disabled={currentPage >= totalPages}
-              onClick={() => handlePageChange(currentPage + 1)}
-            >
-              →
-            </PageNavButton>
-          </StyledPagination>
+              <PageNavButton
+                disabled={currentPage >= totalPages}
+                onClick={() => handlePageChange(currentPage + 1)}
+              >
+                →
+              </PageNavButton>
+            </StyledPagination>
 
-        </TableSection>
-        {successPopupVisible && (
-          <PopupContainer>
-            <PopupMessage>Ticket updated successfully!</PopupMessage>
-          </PopupContainer>
-        )}
+          </TableSection>
+          {successPopupVisible && (
+            <PopupContainer>
+              <PopupMessage>Ticket updated successfully!</PopupMessage>
+            </PopupContainer>
+          )}
 
-        {showEditModal && selectedTicket && (
-          <EditTicketModal
-            ticket={selectedTicket}
-            onClose={() => setShowEditModal(false)}
-            onSave={handleUpdateTicket}
-          />
+          {showEditModal && selectedTicket && (
+            <EditTicketModal
+              ticket={selectedTicket}
+              onClose={() => setShowEditModal(false)}
+              onSave={handleUpdateTicket}
+            />
 
-        )}
-      </Content>
-    </Container>
+          )}
+        </Content>
+      </Container>
+    </ProtectedRoute>
   );
 };
 

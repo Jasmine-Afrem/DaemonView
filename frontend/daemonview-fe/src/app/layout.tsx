@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Orbitron } from "next/font/google";
 import "./globals.css";
 import ClientLayout from './client-layout';
+import { AuthProvider } from './context/AuthContext';
+import { LoadingProvider } from './context/LoadingContext';
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -34,15 +36,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <head>
-        <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} antialiased`}>
-        <ClientLayout>
-          {children}
-        </ClientLayout>
-      </body>
-    </html>
+    <AuthProvider>
+      <LoadingProvider>
+        <html lang="en">
+          <head>
+            <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet" />
+          </head>
+          <body className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} antialiased`}>
+            <ClientLayout>
+              {children}
+            </ClientLayout>
+          </body>
+        </html>
+      </LoadingProvider>
+    </AuthProvider>
   );
 }

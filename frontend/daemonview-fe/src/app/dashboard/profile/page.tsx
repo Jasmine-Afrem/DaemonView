@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styled from 'styled-components';
 import { FiArrowLeft, FiUser, FiCamera, FiEye, FiEyeOff } from 'react-icons/fi';
+import { useAuth } from '../../context/AuthContext';
+import ProtectedRoute from '../../components/ProtectedRoute';
+
 
 const ProfilePage = () => {
   const [userInfo, setUserInfo] = useState({
@@ -19,6 +22,7 @@ const ProfilePage = () => {
   const [popupVisible, setPopupVisible] = useState(false);
 
   const router = useRouter();
+  const auth = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -52,19 +56,10 @@ const ProfilePage = () => {
     setTimeout(() => setShowPopup(false), 400);
   };
 
-  const resetForm = () => {
-    setUserInfo({
-      username: 'John Doe',
-      email: 'john.doe@example.com',
-      password: 'password',
-      avatar: '',
-    });
-  };
-
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/check-auth', {
+        const res = await fetch('http://localhost:8080/api/me', {
           method: 'GET',
           credentials: 'include',
         });
@@ -73,7 +68,7 @@ const ProfilePage = () => {
           router.push('/login');
         } else {
           const data = await res.json();
-          setUserInfo({ ...userInfo, username: data.user.username, email: data.user.email });
+          setUserInfo({ ...userInfo, username: auth.user?.username || "", email: auth.user?.email || "" });
         }
       } catch (err) {
         console.error('Error checking session:', err);
@@ -84,6 +79,7 @@ const ProfilePage = () => {
   }, []);
 
   return (
+    <ProtectedRoute>
     <Container>
       <Header>
         <Back onClick={() => window.history.back()}>
@@ -147,6 +143,7 @@ const ProfilePage = () => {
       </Popup>
       )}
     </Container>
+    </ProtectedRoute>
   );
 };
 

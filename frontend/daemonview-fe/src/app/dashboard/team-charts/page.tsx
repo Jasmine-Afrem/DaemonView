@@ -1,5 +1,7 @@
 'use client';
 
+import ProtectedRoute from '../../components/ProtectedRoute'
+import { useAuth } from '../../context/AuthContext';
 import { useEffect, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useRouter } from 'next/navigation';
@@ -33,33 +35,41 @@ ChartJS.register(
 );
 ChartJS.register({
   id: 'customLabels',
-  beforeDraw(chart, args, options: any) {
+  afterDatasetsDraw(chart, args, options: any) {
     const {
       ctx,
       chartArea: { top },
-      scales: { x },
     } = chart;
 
     const teamNames = options.teamNames || [];
     const statusCount = options.statusCount || 4;
 
+    const meta = chart.getDatasetMeta(0);
+    const bars = meta?.data || [];
+
+    if (!bars.length) return;
+
     ctx.save();
     ctx.fillStyle = 'white';
-    ctx.font = 'bold 13px sans-serif';
+    ctx.font = 'bold 13px Orbitron, sans-serif';
     ctx.textAlign = 'center';
 
     teamNames.forEach((team: string, i: number) => {
-      const firstIndex = i * statusCount;
-      const lastIndex = firstIndex + statusCount - 1;
-      const x1 = x.getPixelForTick(firstIndex);
-      const x2 = x.getPixelForTick(lastIndex);
-      const center = (x1 + x2) / 2;
-      ctx.fillText(team, center, top - 10);
+      const startIndex = i * statusCount;
+      const endIndex = startIndex + statusCount - 1;
+
+      const startBar = bars[startIndex];
+      const endBar = bars[endIndex];
+      if (!startBar || !endBar) return;
+
+      const centerX = (startBar.x + endBar.x) / 2;
+      ctx.fillText(team, centerX, top + 10);
     });
 
     ctx.restore();
-  },
+  }
 });
+
 
 interface ActiveFilterDisplay {
   key: 'startDate' | 'endDate' | 'priority';
@@ -90,45 +100,47 @@ const TeamCharts = () => {
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [activeFiltersForDisplay, setActiveFiltersForDisplay] = useState<ActiveFilterDisplay[]>([]);
-  const [filtersApplied, setFiltersApplied] = useState(false); // Flag to trigger useEffect
+  const [filtersApplied, setFiltersApplied] = useState(false);
 
   const [drillData, setDrillData] = useState<any | null>(null);
   const [showDrillModal, setShowDrillModal] = useState(false);
   const handleDrillClick = async (teamName: string, category: string, drillType: string) => {
     let tickets: any[] = [];
-  
+
     if (drillType === 'slaCompliance' && (category === 'Within SLA' || category === 'Outside SLA')) {
-    const slaStatus = category === 'Within SLA' ? 'Yes' : 'No';
-    tickets = await fetchDrillTicketsForSLA({
-      start_date: filterStartDate,
-      end_date: filterEndDate,
-      priority: filterPriority,
-      sla_status: slaStatus,
-      team: teamName
-    });
-  } else if (drillType === 'resolutionState' && (category === 'Resolved' || category === 'Unresolved')) {
-    const resolvedValue = category === 'Resolved' ? 'yes' : 'no';
-    tickets = await fetchDrillTicketsForResolved({
-      start_date: filterStartDate,
-      end_date: filterEndDate,
-      priority: filterPriority,
-      resolved: resolvedValue,
-      team: teamName
-    });
-  } else if (drillType === 'ticketStatus' && ['Open', 'In_progress', 'Resolved', 'Closed'].includes(category)) {
-    const normalizedStatus = category.toLowerCase();
-    tickets = await fetchDrillTicketsByStatus({
-      start_date: filterStartDate,
-      end_date: filterEndDate,
-      priority: filterPriority,
-      status: normalizedStatus,
-      team: teamName
-    });
+      const slaStatus = category === 'Within SLA' ? 'Yes' : 'No';
+      tickets = await fetchDrillTicketsForSLA({
+        start_date: filterStartDate,
+        end_date: filterEndDate,
+        priority: filterPriority,
+        sla_status: slaStatus,
+        team: teamName
+      });
+    } else if (drillType === 'resolutionState' && (category === 'Resolved' || category === 'Unresolved')) {
+      const resolvedValue = category === 'Resolved' ? 'yes' : 'no';
+      tickets = await fetchDrillTicketsForResolved({
+        start_date: filterStartDate,
+        end_date: filterEndDate,
+        priority: filterPriority,
+        resolved: resolvedValue,
+        team: teamName
+      });
+    } else if (drillType === 'ticketStatus' && ['Open', 'In_progress', 'Resolved', 'Closed'].includes(category)) {
+      const normalizedStatus = category.toLowerCase();
+      tickets = await fetchDrillTicketsByStatus({
+        start_date: filterStartDate,
+        end_date: filterEndDate,
+        priority: filterPriority,
+        status: normalizedStatus,
+        team: teamName
+      });
     }
-    
+
     setDrillData({ team: teamName, category, tickets });
     setShowDrillModal(true);
   };
+
+  const auth = useAuth();
 
   const buildChartApiQueryString = (): string => {
     const params = new URLSearchParams();
@@ -219,12 +231,12 @@ const TeamCharts = () => {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/check-auth', {
+        const res = await fetch('http://localhost:8080/api/me', {
           method: 'GET', credentials: 'include'
         });
         if (res.ok) {
           const data = await res.json();
-          setUsername(data.user.username);
+          setUsername(auth.user?.username || "");
         } else {
           router.push('/login');
         }
@@ -272,26 +284,25 @@ const TeamCharts = () => {
   }) => {
     try {
       const params = new URLSearchParams();
-  
+
       if (start_date) params.append('start_date', start_date);
       if (end_date) params.append('end_date', end_date);
       if (priority) params.append('priority', priority);
       if (sla_status) params.append('sla_status', sla_status);
       params.append('team', team);
-  
+
       const response = await fetch(`http://localhost:8080/api/sla-compliance-teams-tickets?${params.toString()}`, {
         method: 'GET',
         credentials: 'include'
       });
-  
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
-  
+
       const rawData = await response.json();
-  
-      // Convertim datele primite în format compatibil cu `Ticket` (folosit de `TeamDrillModal`)
+
       const mappedTickets = rawData.map((t: any) => ({
         ticket_id: String(t['Ticket ID']),
         description: t['Description'],
@@ -308,16 +319,16 @@ const TeamCharts = () => {
         within_sla: t['Within SLA'] === 1,
         related_incidents: t['Related Incidents'],
         related_devices: t['Related Devices'],
-        notes: t['Info'] || ''  // opțional
+        notes: t['Info'] || ''
       }));
-  
+
       return mappedTickets;
     } catch (err) {
       console.error('Failed to fetch SLA drill tickets:', err);
       return [];
     }
   };
-  
+
 
   const fetchResolvedData = async () => {
     const queryString = buildChartApiQueryString();
@@ -350,30 +361,30 @@ const TeamCharts = () => {
     start_date?: string;
     end_date?: string;
     priority?: string;
-    resolved?: string;  // trebuie să fie 'Resolved' sau 'Unresolved'
+    resolved?: string;
     team: string;
   }) => {
     try {
       const params = new URLSearchParams();
-  
+
       if (start_date) params.append('start_date', start_date);
       if (end_date) params.append('end_date', end_date);
       if (priority) params.append('priority', priority);
-      if (resolved) params.append('resolved', resolved); // atenție: trebuie să fie 'Resolved'/'Unresolved'
+      if (resolved) params.append('resolved', resolved);
       params.append('team', team);
-  
+
       const response = await fetch(`http://localhost:8080/api/tickets-resolved-teams-tickets?${params.toString()}`, {
         method: 'GET',
         credentials: 'include'
       });
-  
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
-  
+
       const rawData = await response.json();
-  
+
       const mappedTickets = rawData.map((t: any) => ({
         ticket_id: String(t['Ticket ID']),
         description: t['Description'],
@@ -392,14 +403,14 @@ const TeamCharts = () => {
         related_devices: t['Related Devices'],
         notes: t['Info'] || ''
       }));
-  
+
       return mappedTickets;
     } catch (err) {
       console.error('Failed to fetch resolved tickets drill:', err);
       return [];
     }
   };
-  
+
 
   const fetchStatusVolume = async () => {
     const queryString = buildChartApiQueryString();
@@ -437,25 +448,25 @@ const TeamCharts = () => {
   }) => {
     try {
       const params = new URLSearchParams();
-  
+
       if (start_date) params.append('start_date', start_date);
       if (end_date) params.append('end_date', end_date);
       if (priority) params.append('priority', priority);
       if (status) params.append('status', status);
       params.append('team', team);
-  
+
       const response = await fetch(`http://localhost:8080/api/tickets-by-status-teams-tickets?${params.toString()}`, {
         method: 'GET',
         credentials: 'include'
       });
-  
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
       console.log(response);
       const rawData = await response.json();
-  
+
       const mappedTickets = rawData.map((t: any) => ({
         ticket_id: String(t['Ticket ID']),
         description: t['Description'],
@@ -474,14 +485,14 @@ const TeamCharts = () => {
         related_devices: t['Related Devices'],
         notes: t['Info'] || ''
       }));
-  
+
       return mappedTickets;
     } catch (err) {
       console.error('Failed to fetch tickets by status drill:', err);
       return [];
     }
   };
-  
+
 
   const convertHHMMSStoMinutes = (str: string | null | undefined): number => {
     if (!str) return 0;
@@ -534,17 +545,16 @@ const TeamCharts = () => {
 
   const handleProfileClick = () => router.push('/dashboard/profile');
   const handleLogout = async () => {
-    try {
-      await fetch('http://localhost:8080/api/logout', { method: 'POST', credentials: 'include' });
-      router.push('/login');
-    } catch (error) { console.error('Logout failed:', error); }
+    if (auth) {
+      auth.logout();
+    }
   };
 
   const sidebarIcons = [
     { icon: <FiGrid />, label: 'Dashboard', onClick: () => router.push('/dashboard') },
     { icon: <FiTag />, label: 'Ticket Charts', onClick: () => router.push('/dashboard/ticket-charts') },
     { icon: <FiUsers />, label: 'Team Charts', onClick: () => router.push('/dashboard/team-charts') },
-    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator')},
+    { icon: <FiShield />, label: 'Account Admin', onClick: () => router.push('/dashboard/account-administrator') },
   ];
   const statusTeams = Array.from(new Set(statusStats.map((s: StatusEntry) => s.team_name)));
   const statusOrder = ['open', 'in_progress', 'resolved', 'closed'];
@@ -584,460 +594,470 @@ const TeamCharts = () => {
 
 
   return (
-    <Wrapper>
-      <Sidebar $isOpen={sidebarOpen}>
-        {sidebarIcons.map(({ icon, label, onClick }, idx) => (
-          <SidebarButton key={idx} title={label} onClick={onClick}>
-            {icon}
-          </SidebarButton>
-        ))}
-      </Sidebar>
+    <ProtectedRoute>
+      <Wrapper>
+        <Sidebar $isOpen={sidebarOpen}>
+          {sidebarIcons
+            .filter(({ label }) => {
+              if (label === 'Account Admin' && auth.user?.role !== 'admin') return false;
+              return true;
+            })
+            .map(({ icon, label, onClick }, idx) => (
+              <SidebarButton key={idx} title={label} onClick={onClick}>
+                {icon}
+              </SidebarButton>
+            ))}
 
-      <Content $isSidebarOpen={sidebarOpen}>
-        <Header>
-          <LeftHeader>
-            <SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
-              {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
-            </SidebarToggle>
-          </LeftHeader>
-          <TitleImage src="/images/daemonview.png" alt="DaemonView" />
-          <UserArea>
-            <ProfileIcon onClick={handleProfileClick} />
-            {username}
-            <LogoutIcon onClick={handleLogout} />
-          </UserArea>
-        </Header>
-        <ControlsBar>
-          <RefreshButton onClick={refreshAllTeamChartData} disabled={loading}>
-            <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
-          </RefreshButton>
+        </Sidebar>
 
-          <FilterControls>
-            {activeFiltersForDisplay.length > 0 && (
-              <AppliedFilters>
-                {activeFiltersForDisplay.map((filter) => (
-                  <FilterTag key={filter.key}>
-                    {filter.label}: {filter.value}
-                    <FilterTagX onClick={() => handleRemoveFilter(filter.key)} />
-                  </FilterTag>
-                ))}
-              </AppliedFilters>
-            )}
+        <Content $isSidebarOpen={sidebarOpen}>
+          <Header>
+            <LeftHeader>
+              <SidebarToggle onClick={() => setSidebarOpen(!sidebarOpen)}>
+                {sidebarOpen ? <FiX size={20} /> : <FiMenu size={20} />}
+              </SidebarToggle>
+            </LeftHeader>
+            <TitleImage src="/images/daemonview.png" alt="DaemonView" />
+            <UserArea>
+              <ProfileIcon onClick={handleProfileClick} />
+              {username}
+              <LogoutIcon onClick={handleLogout} />
+            </UserArea>
+          </Header>
+          <ControlsBar>
+            <RefreshButton onClick={refreshAllTeamChartData} disabled={loading}>
+              <FiRefreshCcw size={16} /> {loading ? 'Refreshing...' : 'Refresh'}
+            </RefreshButton>
 
-            <FilterWrapper>
-              <TableActions onClick={toggleFilterPopup}>
-                <FiFilter />
-              </TableActions>
-              {showFilterPopup && (
-                <NewFilterPopup
-                  $isClosing={isClosingPopup}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <h4>Filter Options</h4>
-                  <label className={filterStartDate ? 'active' : ''}>
-                    Start Date:
-                    <input
-                      type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      max={filterEndDate || new Date().toISOString().split('T')[0]}
-                    />
-                  </label>
-                  <label className={filterEndDate ? 'active' : ''}>
-                    End Date:
-                    <input
-                      type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      min={filterStartDate}
-                      max={new Date().toISOString().split('T')[0]}
-                    />
-                  </label>
-                  <label className={filterPriority ? 'active' : ''}>
-                    Priority:
-                    <select
-                      value={filterPriority}
-                      onChange={(e) => setFilterPriority(e.target.value)}
-                    >
-                      <option value="">Select priority</option>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                      <option value="Critical">Critical</option>
-                    </select>
-                  </label>
-
-                  <FilterPopupActions>
-                    <ClearFilterButton onClick={handleClearAllFilters}>
-                      Clear All
-                    </ClearFilterButton>
-                    <ApplyFilterButton onClick={handleApplyFilters}>
-                      Apply
-                    </ApplyFilterButton>
-                  </FilterPopupActions>
-                </NewFilterPopup>
+            <FilterControls>
+              {activeFiltersForDisplay.length > 0 && (
+                <AppliedFilters>
+                  {activeFiltersForDisplay.map((filter) => (
+                    <FilterTag key={filter.key}>
+                      {filter.label}: {filter.value}
+                      <FilterTagX onClick={() => handleRemoveFilter(filter.key)} />
+                    </FilterTag>
+                  ))}
+                </AppliedFilters>
               )}
-            </FilterWrapper>
-          </FilterControls>
-        </ControlsBar>
 
-        <ChartSection>
-          <Card style={{ gridColumn: 'span 2' }}>
-            <CardTitle><FiBarChart2 /> Tickets Resolved by Team</CardTitle>
-            {loading && resolvedStats.length === 0 ? (
-              <NoDataMessage>Loading charts...</NoDataMessage>
-            ) : resolvedStats.length > 0 ? (
-              <PieChartsWrapper>
-                {resolvedStats.map((team: any, idx: number) => (
-                  <PieChartContainer key={`pie-${idx}`}>
-                    <TeamLabel>{team.team_name}</TeamLabel>
-                    <Chart
-                      type="pie"
-                      data={{
-                        labels: ['Resolved', 'Unresolved'],
-                        datasets: [{
-                          data: [Number(team.resolved_count), Number(team.unresolved_count)],
-                          backgroundColor: ['#27ae60', '#e74c3c'],
-                          hoverOffset: 4,
-                        }]
-                      }}
-                      
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        onClick: (_, elements) => {
-                          if (elements.length > 0) {
-                            const category = elements[0].index === 0 ? 'Resolved' : 'Unresolved';
-                            handleDrillClick(team.team_name, category, 'resolutionState');
-                          }
-                        },
-                        plugins: {
-                          legend: {
-                            labels: {
-                              color: '#fff',
-                              font: { size: 12 }
-                            },
-                            position: 'bottom'
+              <FilterWrapper>
+                <TableActions onClick={toggleFilterPopup}>
+                  <FiFilter />
+                </TableActions>
+                {showFilterPopup && (
+                  <NewFilterPopup
+                    $isClosing={isClosingPopup}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h4>Filter Options</h4>
+                    <label className={filterStartDate ? 'active' : ''}>
+                      Start Date:
+                      <input
+                        type="date"
+                        value={filterStartDate}
+                        onChange={(e) => setFilterStartDate(e.target.value)}
+                        max={filterEndDate || new Date().toISOString().split('T')[0]}
+                      />
+                    </label>
+                    <label className={filterEndDate ? 'active' : ''}>
+                      End Date:
+                      <input
+                        type="date"
+                        value={filterEndDate}
+                        onChange={(e) => setFilterEndDate(e.target.value)}
+                        min={filterStartDate}
+                        max={new Date().toISOString().split('T')[0]}
+                      />
+                    </label>
+                    <label className={filterPriority ? 'active' : ''}>
+                      Priority:
+                      <select
+                        value={filterPriority}
+                        onChange={(e) => setFilterPriority(e.target.value)}
+                      >
+                        <option value="">Select priority</option>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                      </select>
+                    </label>
+
+                    <FilterPopupActions>
+                      <ClearFilterButton onClick={handleClearAllFilters}>
+                        Clear All
+                      </ClearFilterButton>
+                      <ApplyFilterButton onClick={handleApplyFilters}>
+                        Apply
+                      </ApplyFilterButton>
+                    </FilterPopupActions>
+                  </NewFilterPopup>
+                )}
+              </FilterWrapper>
+            </FilterControls>
+          </ControlsBar>
+
+          <ChartSection>
+            <Card style={{ gridColumn: 'span 2' }}>
+              <CardTitle><FiBarChart2 /> Tickets Resolved by Team</CardTitle>
+              {loading && resolvedStats.length === 0 ? (
+                <NoDataMessage>Loading charts...</NoDataMessage>
+              ) : resolvedStats.length > 0 ? (
+                <PieChartsWrapper>
+                  {resolvedStats.map((team: any, idx: number) => (
+                    <PieChartContainer key={`pie-${idx}`}>
+                      <TeamLabel>{team.team_name}</TeamLabel>
+                      <Chart
+                        type="pie"
+                        data={{
+                          labels: ['Resolved', 'Unresolved'],
+                          datasets: [{
+                            data: [Number(team.resolved_count), Number(team.unresolved_count)],
+                            backgroundColor: ['#27ae60', '#e74c3c'],
+                            hoverOffset: 4,
+                          }]
+                        }}
+
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          onClick: (_, elements) => {
+                            if (elements.length > 0) {
+                              const category = elements[0].index === 0 ? 'Resolved' : 'Unresolved';
+                              handleDrillClick(team.team_name, category, 'resolutionState');
+                            }
                           },
-                          tooltip: {
-                            callbacks: {
-                              label: (context) => {
-                                let label = context.label || '';
-                                if (label) label += ': ';
-                                if (context.parsed !== null) label += context.parsed;
-                                return label;
+                          plugins: {
+                            legend: {
+                              labels: {
+                                color: '#fff',
+                                font: { size: 12 }
+                              },
+                              position: 'bottom'
+                            },
+                            tooltip: {
+                              callbacks: {
+                                label: (context) => {
+                                  let label = context.label || '';
+                                  if (label) label += ': ';
+                                  if (context.parsed !== null) label += context.parsed;
+                                  return label;
+                                }
+                              }
+                            },
+                            datalabels: {
+                              color: 'white',
+                              font: {
+                                weight: 'bold',
+                                size: 13,
+                              },
+                              formatter: (value: number, context) => {
+                                const total = context.chart.data.datasets[0].data.reduce(
+                                  (sum, val) => (Number(sum) || 0) + (Number(val) || 0), 0
+                                );
+                                const percentage = total && total !== 0 ? ((value / total) * 100).toFixed(0) : '0';
+                                return `${value} (${percentage}%)`;
                               }
                             }
-                          },
-                          datalabels: {
-                            color: 'white',
-                            font: {
-                              weight: 'bold',
-                              size: 13,
-                            },
-                            formatter: (value: number, context) => {
-                              const total = context.chart.data.datasets[0].data.reduce((sum, val) => sum + val, 0);
-                              const percentage = ((value / total) * 100).toFixed(0);
-                              return `${value} (${percentage}%)`;
-                            }
                           }
+                        }}
+
+                      />
+
+                    </PieChartContainer>
+                  ))}
+                </PieChartsWrapper>
+              ) : (
+                <NoDataMessage>No data for Tickets Resolved by Team.</NoDataMessage>
+              )}
+            </Card>
+
+            <Card style={{ gridColumn: 'span 2' }}>
+              <CardTitle><FiBarChart2 /> SLA Compliance per Team</CardTitle>
+              {loading && teamStats.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+              ) : teamStats.length > 0 ? (
+                <ChartWrapper>
+                  <Bar
+                    data={{
+                      labels: teamStats.map((team: any) => team.team_name),
+                      datasets: [
+                        {
+                          label: 'Within SLA',
+                          data: teamStats.map((team: any) => Number(team.within_sla)),
+                          backgroundColor: '#27ae60',
+                          barThickness: 70
+                        },
+                        {
+                          label: 'Outside SLA',
+                          data: teamStats.map((team: any) =>
+                            Number(team.total_tickets) - Number(team.within_sla)
+                          ),
+                          backgroundColor: '#e74c3c',
+                          barThickness: 70
                         }
-                      }}
-                      
-                    />
+                      ]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      onClick: (_, elements) => {
+                        if (elements.length > 0) {
+                          const clickedBar = elements[0];
+                          const teamIndex = clickedBar.index;
+                          const datasetIndex = clickedBar.datasetIndex;
 
-                  </PieChartContainer>
-                ))}
-              </PieChartsWrapper>
-            ) : (
-              <NoDataMessage>No data for Tickets Resolved by Team.</NoDataMessage>
-            )}
-          </Card>
+                          const teamName = teamStats[teamIndex].team_name;
+                          const slaLabel = datasetIndex === 0 ? 'Within SLA' : 'Outside SLA';
 
-          <Card style={{ gridColumn: 'span 2' }}>
-            <CardTitle><FiBarChart2 /> SLA Compliance per Team</CardTitle>
-            {loading && teamStats.length === 0 ? (
-              <NoDataMessage>Loading chart...</NoDataMessage>
-            ) : teamStats.length > 0 ? (
-              <ChartWrapper>
-                <Bar
-                  data={{
-                    labels: teamStats.map((team: any) => team.team_name),
-                    datasets: [
-                      {
-                        label: 'Within SLA',
-                        data: teamStats.map((team: any) => Number(team.within_sla)),
-                        backgroundColor: '#27ae60',
-                        barThickness: 70
+                          handleDrillClick(teamName, slaLabel, 'slaCompliance');
+                        }
                       },
-                      {
-                        label: 'Outside SLA',
-                        data: teamStats.map((team: any) =>
-                          Number(team.total_tickets) - Number(team.within_sla)
-                        ),
-                        backgroundColor: '#e74c3c',
-                        barThickness: 70
-                      }
-                    ]
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    onClick: (_, elements) => {
-                      if (elements.length > 0) {
-                        const clickedBar = elements[0];
-                        const teamIndex = clickedBar.index;
-                        const datasetIndex = clickedBar.datasetIndex;
-                  
-                        const teamName = teamStats[teamIndex].team_name;
-                        const slaLabel = datasetIndex === 0 ? 'Within SLA' : 'Outside SLA';
-                  
-                        handleDrillClick(teamName, slaLabel, 'slaCompliance'); // apelează funcția ta
-                      }
-                    },
-                    plugins: {
-                      datalabels: {
-                        display: true,
-                        color: '#fff',
-                        anchor: 'center',
-                        align: 'center',
-                        font: {
-                          weight: 'bold',
-                          size: 13,
-                        },
-                        formatter: (value) => value > 0 ? value : '',
-                      },
-                      legend: {
-                        labels: {
-                          color: '#fff',
-                          font: { size: 14 }
-                        },
-                        position: 'top'
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function (context) {
-                            const label = context.dataset.label || '';
-                            const value = context.parsed.y;
-                            return `${label}: ${value} tickets`;
-                          }
-                        },
-                        backgroundColor: 'rgba(0,0,0,0.7)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        borderColor: '#fff',
-                        borderWidth: 1,
-                      }
-                    },
-                    scales: {
-                      y: {
-                        stacked: true,
-                        beginAtZero: true,
-                        ticks: { color: '#fff' },
-                        title: {
+                      plugins: {
+                        datalabels: {
                           display: true,
-                          text: 'Number of Tickets',
-                          color: '#fff'
-                        }
-                      },
-                      x: {
-                        stacked: true,
-                        ticks: { color: '#fff' }
-                      }
-                    },
-                    layout: {
-                      padding: { top: 10, bottom: 10 }
-                    }
-                  }}
-                  
-                  
-                />
-              </ChartWrapper>
-            ) : (
-              <NoDataMessage>No SLA data available for teams.</NoDataMessage>
-            )}
-          </Card>
-
-          <Card>
-            <CardTitle><FiClock /> Avg. Resolution Time (Minutes) by Team</CardTitle>
-            {loading && resolutionStats.length === 0 ? (
-              <NoDataMessage>Loading chart...</NoDataMessage>
-            ) : resolutionStats.length > 0 ? (
-              <ChartWrapper>
-                <Bar
-                  data={{
-                    labels: resolutionStats.map((r: any) => r.team),
-                    datasets: [{
-                      label: 'Resolution Time (min)',
-                      data: resolutionStats.map((r: any) => r.timeInMinutes),
-                      backgroundColor: '#f39c12',
-                      barThickness: 30
-                    }]
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom',
-                        labels: {
                           color: '#fff',
-                          font: { size: 14 },
-                          padding: 20
+                          anchor: 'center',
+                          align: 'center',
+                          font: {
+                            weight: 'bold',
+                            size: 13,
+                          },
+                          formatter: (value) => value > 0 ? value : '',
+                        },
+                        legend: {
+                          labels: {
+                            color: '#fff',
+                            font: { size: 14 }
+                          },
+                          position: 'top'
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function (context) {
+                              const label = context.dataset.label || '';
+                              const value = context.parsed.y;
+                              return `${label}: ${value} tickets`;
+                            }
+                          },
+                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          titleColor: '#fff',
+                          bodyColor: '#fff',
+                          borderColor: '#fff',
+                          borderWidth: 1,
                         }
                       },
-                      
-                      tooltip: {
-                        callbacks: {
-                          label: function (context) {
-                            const value = context.parsed.y;
+                      scales: {
+                        y: {
+                          stacked: true,
+                          beginAtZero: true,
+                          ticks: { color: '#fff' },
+                          title: {
+                            display: true,
+                            text: 'Number of Tickets',
+                            color: '#fff'
+                          }
+                        },
+                        x: {
+                          stacked: true,
+                          ticks: { color: '#fff' }
+                        }
+                      },
+                      layout: {
+                        padding: { top: 10, bottom: 10 }
+                      }
+                    }}
+
+
+                  />
+                </ChartWrapper>
+              ) : (
+                <NoDataMessage>No SLA data available for teams.</NoDataMessage>
+              )}
+            </Card>
+
+            <Card style={{ gridColumn: 'span 2' }}>
+              <CardTitle><FiClock /> Avg. Resolution Time (Minutes) by Team</CardTitle>
+              {loading && resolutionStats.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+              ) : resolutionStats.length > 0 ? (
+                <ChartWrapper style={{ height: '400px' }}>
+                  <Bar
+                    data={{
+                      labels: resolutionStats.map((r: any) => r.team),
+                      datasets: [{
+                        label: 'Resolution Time (min)',
+                        data: resolutionStats.map((r: any) => r.timeInMinutes),
+                        backgroundColor: '#f39c12',
+                        barThickness: 30
+                      }]
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: {
+                          position: 'bottom',
+                          labels: {
+                            color: '#fff',
+                            font: { size: 14 },
+                            padding: 20
+                          }
+                        },
+
+                        tooltip: {
+                          callbacks: {
+                            label: function (context) {
+                              const value = context.parsed.y;
+                              const hours = Math.floor(value / 60);
+                              const minutes = Math.round(value % 60);
+                              return `Resolution Time: ${hours}h ${minutes}m`;
+                            }
+                          },
+                          backgroundColor: 'rgba(0,0,0,0.7)',
+                          titleColor: '#fff',
+                          bodyColor: '#fff',
+                          borderColor: '#fff',
+                          borderWidth: 1,
+                        },
+                        datalabels: {
+                          display: true,
+                          color: 'white',//
+                          anchor: 'end',
+                          align: 'top',
+                          offset: 6,
+                          font: {
+                            size: 13,
+                            weight: 'bold'
+                          },
+                          formatter: function (value: number) {
                             const hours = Math.floor(value / 60);
                             const minutes = Math.round(value % 60);
-                            return `Resolution Time: ${hours}h ${minutes}m`;
+                            return `${hours}h ${minutes}m`;
                           }
-                        },
-                        backgroundColor: 'rgba(0,0,0,0.7)',
-                        titleColor: '#fff',
-                        bodyColor: '#fff',
-                        borderColor: '#fff',
-                        borderWidth: 1,
-                      },
-                      datalabels: {
-                        display: true,
-                        color: 'white',
-                        anchor: 'end',         // se ancorează la capătul barei
-                        align: 'top',          // eticheta apare deasupra barei
-                        offset: 6,             // spațiu între bară și etichetă
-                        font: {
-                          size: 13,
-                          weight: 'bold'
-                        },
-                        formatter: function (value: number) {
-                          const hours = Math.floor(value / 60);
-                          const minutes = Math.round(value % 60);
-                          return `${hours}h ${minutes}m`;
                         }
-                      }
-                      
-                      
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        ticks: {
-                          color: '#fff',
-                          callback: function (value: number) {
-                            return `${value}m`;
-                          }
-                        },
-                        title: {
-                          display: true,
-                          text: 'Minutes',
-                          color: '#fff'
-                        }
-                      },
-                      x: {
-                        ticks: { color: '#fff' }
-                      }
-                    },
-                    layout: {
-                      padding: { top: 20, bottom: 10 }
-                    }
-                  }}
-                  
-                />
-              </ChartWrapper>
-            ) : (
-              <NoDataMessage>No resolution time data available for teams.</NoDataMessage>
-            )}
-          </Card>
 
 
-          <Card style={{ gridColumn: 'span 2' }}>
-            <CardTitle><FiBarChart2 /> Volume by Status Per Team</CardTitle>
-            {loading && statusStats.length === 0 ? (
-              <NoDataMessage>Loading chart...</NoDataMessage>
-            ) : statusStats.length > 0 ? (
-              <ChartWrapper>
-                <Bar
-                  data={volumeDataset}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    onClick: (_, elements) => {
-                      console.log("Clicked bar elements:", elements);
-                    
-                      if (elements.length > 0) {
-                        const index = elements[0].index;
-                        const label = volumeDataset.labels[index];
-                    
-                        console.log("Clicked label:", label); 
-                    
-                        if (label) {
-                          const [teamName, status] = label.split(' - ');
-                          const capitalizedStatus = status.charAt(0).toUpperCase() + status.slice(1);
-                    
-                          console.log("Drill into:", teamName, capitalizedStatus);
-                          handleDrillClick(teamName, capitalizedStatus, 'ticketStatus');
-                        }
-                      }
-                    },                    
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        stacked: false,
-                        ticks: { color: '#fff' },
-                        title: { display: true, text: 'Ticket Count', color: '#fff' },
                       },
-                      x: {
-                        ticks: {
-                          color: '#fff',
-                          callback: (val: any, index: number) => {
-                            const label = volumeDataset.labels[index];
-                            return label?.split(' - ')[1] || '';
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            color: '#fff',
+                            callback: function (this, tickValue: string | number) {
+                              return `${tickValue}m`;
+                            }
+                          },
+                          title: {
+                            display: true,
+                            text: 'Minutes',
+                            color: '#fff'
+                          }
+                        },
+                        x: {
+                          ticks: { color: '#fff' }
+                        }
+                      },
+                      layout: {
+                        padding: { top: 20, bottom: 10 }
+                      }
+                    }}
+
+                  />
+                </ChartWrapper>
+              ) : (
+                <NoDataMessage>No resolution time data available for teams.</NoDataMessage>
+              )}
+            </Card>
+
+
+            <Card style={{ gridColumn: 'span 2' }}>
+              <CardTitle><FiBarChart2 /> Volume by Status Per Team</CardTitle>
+              {loading && statusStats.length === 0 ? (
+                <NoDataMessage>Loading chart...</NoDataMessage>
+              ) : statusStats.length > 0 ? (
+                <ChartWrapper style={{ height: '400px' }}>
+                  <Bar
+                    data={volumeDataset}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      onClick: (_, elements) => {
+                        console.log("Clicked bar elements:", elements);
+
+                        if (elements.length > 0) {
+                          const index = elements[0].index;
+                          const label = volumeDataset.labels[index];
+
+                          console.log("Clicked label:", label);
+
+                          if (label) {
+                            const [teamName, status] = label.split(' - ');
+                            const capitalizedStatus = status.charAt(0).toUpperCase() + status.slice(1);
+
+                            console.log("Drill into:", teamName, capitalizedStatus);
+                            handleDrillClick(teamName, capitalizedStatus, 'ticketStatus');
+                          }
+                        }
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          stacked: false,
+                          ticks: { color: '#fff' },
+                          title: { display: true, text: 'Ticket Count', color: '#fff' },
+                        },
+                        x: {
+                          ticks: {
+                            color: '#fff',
+                            callback: (val: any, index: number) => {
+                              const label = volumeDataset.labels[index];
+                              return label?.split(' - ')[1] || '';
+                            },
                           },
                         },
                       },
-                    },
-                    plugins: {
-                      legend: { display: false },
-                      tooltip: {
-                        callbacks: {
-                          title: (tooltipItems) => tooltipItems[0].label,
-                          label: (context) => `Count: ${context.parsed.y}`,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          callbacks: {
+                            title: (tooltipItems) => tooltipItems[0].label,
+                            label: (context) => `Count: ${context.parsed.y}`,
+                          },
                         },
-                      },
-                      customLabels: {
-                        teamNames: teamNamesForCustomLabel,
-                        statusCount: statusOrder.length,
-                      },
-                      datalabels: {
-                        color: 'white',
-                        anchor: 'center',
-                        align: 'center',
-                        font: {
-                          weight: 'bold',
-                          size: 11
+                        datalabels: {
+                          color: 'white',
+                          anchor: 'center',
+                          align: 'center',
+                          font: {
+                            weight: 'bold',
+                            size: 11
+                          },
+                          formatter: (value: number) => value > 0 ? value : ''
                         },
-                        formatter: (value: number) => value > 0 ? value : ''
+                        customLabels: {
+                          teamNames: teamNamesForCustomLabel,
+                          statusCount: statusOrder.length,
+                        },
                       }
-                    }
-                    ,
-                  }}
-                />
+                      ,
+                    }}
+                  />
 
-              </ChartWrapper>
-            ) : (
-              <NoDataMessage>No volume by status data available for teams.</NoDataMessage>
-            )}
-          </Card>
-        </ChartSection>
-        {showDrillModal && drillData && (
-          <TeamDrillModal data={drillData} onClose={() => setShowDrillModal(false)} />
-        )}
+                </ChartWrapper>
+              ) : (
+                <NoDataMessage>No volume by status data available for teams.</NoDataMessage>
+              )}
+            </Card>
+          </ChartSection>
+          {showDrillModal && drillData && (
+            <TeamDrillModal data={drillData} onClose={() => setShowDrillModal(false)} />
+          )}
 
-      </Content>
-    </Wrapper>
+        </Content>
+      </Wrapper>
+    </ProtectedRoute>
   );
 };
 
@@ -1437,13 +1457,13 @@ const RefreshButton = styled.button`
   align-items: center;
   gap: 6px;
 
-  &:hover:not(:disabled) { // Added :not(:disabled)
+  &:hover:not(:disabled) { 
     background-color: #4e46d4;
     box-shadow: 0 0 8px rgba(99, 91, 255, 0.6),
                 0 0 15px rgba(99, 91, 255, 0.4),
                 0 0 25px rgba(99, 91, 255, 0.2);
   }
-   &:disabled { // Style for disabled state
+   &:disabled {  
     background-color: #2a274f;
     color: #555;
     cursor: not-allowed;
@@ -1510,12 +1530,19 @@ const TeamLabel = styled.div`
 `;
 
 const ChartWrapper = styled.div`
-  height: 400px; 
+  height: 500px;
   width: 100%;
   display: flex;
-  justify-content: center; 
-  flex: 1; 
+  justify-content: center;
+  flex: 1;
+
+  canvas {
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 400px !important;
+  }
 `;
+
 
 const NoDataMessage = styled.p`
   text-align: center;

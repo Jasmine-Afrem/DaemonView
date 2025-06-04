@@ -6,11 +6,11 @@ const mysql = require('mysql2');
 const nodemailer = require('nodemailer');
 
 const db = mysql.createPool({
-  host: '4.tcp.eu.ngrok.io',
+  host: '0.tcp.eu.ngrok.io',
   user: 'telecom_user',
   password: 'parola123!',
   database: 'DaemonView',
-  port: 16741,
+  port: 14645,
 }).promise();
 
 const transporter = nodemailer.createTransport({
@@ -21,12 +21,297 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// GET /api/check-auth
-router.get('/check-auth', (req, res) => {
+// GET /api/me
+router.get('/me', (req, res) => {
   if (req.session.user) {
-    res.json({ loggedIn: true, user: req.session.user });
+    res.status(200).json(req.session.user);
+    console.log(req.session.user.role);
   } else {
-    res.status(401).json({ loggedIn: false });
+    res.status(401).json({ message: 'Not authenticated' });
+  }
+});
+
+// GET /api/get-users
+router.get('/get-users', async (req, res) => {
+  try {
+    const query = 'SELECT id, username, email, role FROM users ORDER BY id ASC';
+    const [users] = await db.execute(query);
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
+
+// GET /api/get-teams
+router.get('/get-teams', async (req, res) => {
+  try {
+    const query = 'CALL get_team_details()';
+    const [users] = await db.execute(query);
+    res.status(200).json(users[0]);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
+
+// POST /api/delete-user
+router.post('/delete-user', async (req, res) => {
+  const { username } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ message: 'Username is required.' });
+  }
+
+  try {
+    const [result] = await db.query('DELETE FROM users WHERE username = ?', [username]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: `User with username '${username}' not found.` });
+    }
+
+    res.status(200).json({ message: `User '${username}' deleted successfully.` });
+
+  } catch (error) {
+    console.error('Error deleting user by name:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
+
+// POST /api/delete-team
+router.post('/delete-team', async (req, res) => {
+  const { name } = req.body;
+
+  if (!name) {
+    return res.status(400).json({ message: 'Team name is required.' });
+  }
+
+  try {
+    const [result] = await db.query('DELETE FROM teams WHERE name = ?', [name]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: `Team with name '${name}' not found.` });
+    }
+
+    res.status(200).json({ message: `Team '${name}' and all its memberships deleted successfully.` });
+
+  } catch (error) {
+    console.error('Error deleting team by name:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
+
+// POST /api/update-team
+router.post('/update-team', async (req, res) => {
+  const { current_name, name, description } = req.body;
+  
+  if (name === undefined && description === undefined) {
+    return res.status(400).json({ message: 'Missing data to update (new name or description)' });
+  }
+
+  try {
+    const updateFields = [];
+    const updateValues = [];
+
+    if (name !== undefined) {
+      updateFields.push('name = ?');
+      updateValues.push(name);
+    }
+
+    if (description !== undefined) {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+    }
+
+    updateValues.push(current_name);
+
+    const updateQuery = `
+      UPDATE teams
+      SET ${updateFields.join(', ')}
+      WHERE name = ?
+    `;
+
+    const [result] = await db.query(updateQuery, updateValues);
+    
+    if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Team not found' });
+    }
+
+    const [updatedTeamRows] = await db.query(
+      'SELECT * FROM teams WHERE name = ?',
+      [current_name]
+    );
+
+    res.status(200).json({ message: 'Team updated successfully' });
+
+  } catch (err) {
+    console.error('Error updating team:', err);
+    res.status(500).json({ message: 'Server error while updating team' });
+  }
+});
+
+// PUT /api/update-user
+router.put('/update-user', async (req, res) => {
+  const { current_username, username, email, role } = req.body;
+
+  if (!current_username) {
+    return res.status(400).json({ message: 'Bad Request: current_username is required to identify the user.' });
+  }
+  if (!username && !email && !role) {
+    return res.status(400).json({ message: 'Bad Request: At least one field (username, email, role) is required to update.' });
+  }
+
+  const updateFields = [];
+  const updateValues = [];
+  const allowedRoles = ['user', 'admin', 'tehnician', 'supervisor'];
+
+  if (username) { updateFields.push('username = ?'); updateValues.push(username); }
+  if (email) { updateFields.push('email = ?'); updateValues.push(email); }
+  if (role) {
+      if (!allowedRoles.includes(role)) {
+          return res.status(400).json({ message: `Invalid role specified.` });
+      }
+      updateFields.push('role = ?');
+      updateValues.push(role);
+  }
+
+  updateValues.push(current_username); // Add identifier for the WHERE clause at the end
+  const query = `UPDATE users SET ${updateFields.join(', ')} WHERE username = ?`;
+
+  try {
+    const [result] = await db.query(query, updateValues);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: `User with username '${current_username}' not found.` });
+    }
+
+    const finalUsername = username || current_username; // Use new username if it was changed
+    const [updatedUserRows] = await db.query(
+      'SELECT id, username, email, role FROM users WHERE username = ?',
+      [finalUsername]
+    );
+
+    res.status(200).json({ message: 'User updated successfully', user: updatedUserRows[0] });
+
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Conflict: That username or email is already taken.' });
+    }
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
+
+// POST /api/remove-member
+router.post('/remove-member', async (req, res) => {
+  const { team_name, username } = req.body;
+
+  if (!team_name || !username) {
+    return res.status(400).json({ message: 'Bad Request: team_name and username are required.' });
+  }
+
+  try {
+    const [teamRows] = await db.query('SELECT id FROM teams WHERE name = ?', [team_name]);
+    if (teamRows.length === 0) {
+      return res.status(404).json({ message: `Team with name '${team_name}' not found.` });
+    }
+    const team_id = teamRows[0].id;
+
+    const [userRows] = await db.query('SELECT id FROM users WHERE username = ?', [username]);
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: `User with username '${username}' not found.` });
+    }
+    const user_id = userRows[0].id;
+
+    const [deleteResult] = await db.query(
+      'DELETE FROM team_members WHERE team_id = ? AND user_id = ?',
+      [team_id, user_id]
+    );
+
+    if (deleteResult.affectedRows === 0) {
+      return res.status(404).json({ message: `Membership not found: User '${username}' is not a member of team '${team_name}'.` });
+    }
+
+    res.status(200).json({ message: `User '${username}' successfully removed from team '${team_name}'.` });
+
+  } catch (error) {
+    console.error('Error removing member from team:', error);
+    res.status(500).json({ message: 'An internal server error occurred while removing the member.' });
+  }
+});
+
+// POST /api/add-member
+router.post('/add-member', async (req, res) => {
+  const { team_name, username } = req.body;
+
+  if (!team_name || !username) {
+    return res.status(400).json({ message: 'Bad Request: team_name and username are required.' });
+  }
+
+  try {
+    const [teamRows] = await db.query('SELECT id FROM teams WHERE name = ?', [team_name]);
+    if (teamRows.length === 0) {
+      return res.status(404).json({ message: `Team with name '${team_name}' not found.` });
+    }
+    const team_id = teamRows[0].id;
+
+    const [userRows] = await db.query('SELECT id FROM users WHERE username = ?', [username]);
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: `User with username '${username}' not found.` });
+    }
+    const user_id = userRows[0].id;
+
+    await db.query(
+      'INSERT INTO team_members (team_id, user_id) VALUES (?, ?)',
+      [team_id, user_id]
+    );
+
+    res.status(201).json({ message: `User '${username}' successfully added to team '${team_name}'.` });
+
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: `Conflict: User '${username}' is already a member of team '${team_name}'.` });
+    }
+    console.error('Error adding member to team:', error);
+    res.status(500).json({ message: 'An internal server error occurred.' });
+  }
+});
+
+// POST /api/create-team
+router.post('/create-team', async (req, res) => {
+  const { name, description } = req.body;
+
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ message: 'Bad Request: Team name is required and cannot be empty.' });
+  }
+
+  try {
+    const [existingTeams] = await db.query('SELECT id FROM teams WHERE name = ?', [name]);
+    if (existingTeams.length > 0) {
+      return res.status(409).json({ message: `Conflict: A team with the name '${name}' already exists.` });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO teams (name, description) VALUES (?, ?)',
+      [name, description || null] // Use null if description is not provided or is empty
+    );
+
+    const newTeamId = result.insertId;
+
+    const [newTeamRows] = await db.query('SELECT * FROM teams WHERE id = ?', [newTeamId]);
+    
+    if (newTeamRows.length === 0) {
+        return res.status(500).json({ message: 'Failed to retrieve the newly created team.' });
+    }
+
+    res.status(201).json({ message: 'Team created successfully', team: newTeamRows[0] });
+
+  } catch (error) {
+    console.error('Error creating team:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ message: `Conflict: A team with the name '${name}' already exists.` });
+    }
+    res.status(500).json({ message: 'An internal server error occurred while creating the team.' });
   }
 });
 
@@ -425,7 +710,7 @@ router.get('/resolution-time-teams', async (req, res) => {
 
 // POST /api/register
 router.post('/register', async (req, res) => {
-  const { username, password, email } = req.body;
+  const { username, email } = req.body;
 
   try {
     const [existingUsers] = await db.query(
@@ -437,14 +722,27 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Hash the password
+    const password = crypto.randomBytes(12).toString('hex');
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert the new user
     await db.query(
-      'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
-      [username, email, hashedPassword]
+      'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
+      [username, email, hashedPassword, 'user']
     );
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject: 'Your New Account at DaemonView',
+      html: `
+        <h2>Welcome to DaemonView!</h2>
+        <p>An account has been created for you.</p>
+        <p>Your username is: <strong>${username}</strong></p>
+        <p>Your temporary password is: <strong>${password}</strong></p>
+        <p>Please log in and change your password immediately for security reasons.</p>
+      `,
+    });
 
     res.status(201).json({ message: 'User registered successfully' });
   } catch (err) {
@@ -465,7 +763,7 @@ router.post('/login', async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(400).json({ message: 'User not found' });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     const user = rows[0];
@@ -473,22 +771,24 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid password' });
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     req.session.user = {
       id: user.id,
       username: user.username,
-      email: user.email
+      email: user.email,
+      role: user.role
     };
 
-    res.json({ message: 'Login successful' });
+    res.status(200).json(req.session.user);
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ message: 'Server error during login' });
   }
 });
 
+// POST /api/logout
 router.post('/logout', (req, res) => {
   req.session.destroy(() => {
     res.clearCookie('connect.sid');
