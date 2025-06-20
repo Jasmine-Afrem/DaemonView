@@ -34,56 +34,120 @@
 
 ---
 
-## 📌 Overview
+## Overview
 
-**DaemonView** is a web-based operational dashboard developed in collaboration with **Nokia**. Designed to assist internal teams in monitoring and managing tickets, DaemonView provides both clarity and control through an intuitive user interface.
+DaemonView is a web-based operational dashboard designed to provide internal teams with powerful tools for monitoring and managing support tickets. Developed in partnership with Nokia, the platform offers clarity and control through an intuitive interface, real-time data visualization, and robust reporting capabilities.
 
-This project is currently in development and aims to offer:
+## Key Features
 
-- 🎫 Ticket viewing and editing  
-- 📊 Real-time data visualization with charts  
-- 📤 Export chart data to Excel for reporting and analysis  
-- ✅ Seamless team collaboration through a responsive web interface
+- **Ticket Management:** A comprehensive system to view, edit, and manage the lifecycle of support and issue tickets.
+- **Dashboard Analytics:** Visualize ticket trends, priority distribution, and SLA compliance with dynamic, real-time charts.
+- **Interactive Drill-Down:** Analyze data with greater precision by clicking on chart segments to view the underlying tickets.
+- **Data Export:** Export filtered chart data to Excel for offline analysis, reporting, and presentations.
+- **Advanced Filtering:** Efficiently locate information using filters for priority, date range, and status.
+- **Secure Authentication:** Role-based access control and a secure password recovery system protect sensitive data.
+- **Responsive Design:** A fully responsive interface ensures a seamless user experience across all devices.
 
 ---
 
-## 🔧 Tech Stack
+## Tech Stack
 
-- **Frontend:** [Next.js](https://nextjs.org/) (React Framework)
-- **Backend:** [Express.js](https://expressjs.com/) (Node.js)
-- **Styling:** Styled Components
-- **Charts:** Chart.js
-- **Authentication:** Session-based
+- **Frontend:** Next.js (React Framework)
+- **Backend:** Express.js (Node.js)
 - **Database:** MySQL
+- **Styling:** Styled Components
+- **Charting:** Chart.js
+- **Authentication:** Session-based
 
 ---
 
-## ✨ Features
+## Screenshots
 
-- 🗂 **Ticket Management** – View, edit, and manage support/issue tickets.
-- 📈 **Dashboard Analytics** – View charts displaying ticket trends, priorities, SLA compliance, and more.
-- 🔎 **Filter System** – Filter tickets by priority, date range, and status.
-- 🔐 **Authentication** – Role-based access to secure sensitive data.
-- 🔄 **Responsive Design** – Works seamlessly across devices.
+<p align="center">
+  <strong>Login Page</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/login.png" alt="Login Page" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Loading State</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/loading.png" alt="Loading State" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Main Dashboard</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/dashboard.png" alt="DaemonView Dashboard" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Account Settings</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/account-settings.png" alt="Account Settings Page" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Tickets Charts</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/tickets-charts.png" alt="Tickets Charts" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Tickets Charts - Extended View</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/tickets-charts-extended.png" alt="Tickets Charts Extended View" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Drill-Down on Chart Data</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/drilldown.png" alt="Chart Data Drill-Down" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Team-Specific Charts</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/team-charts.png" alt="Team Charts" width="1000"/>
+</p>
+<br/>
+<p align="center">
+  <strong>Admin Page: User & Team Management</strong><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/admin-page.png" alt="Admin Page" width="1000"/>
+  <br/><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/admin-page-members-in-a-team.png" alt="View Members in a Team" width="1000"/>
+  <br/><br/>
+  <img src="https://raw.githubusercontent.com/Jasmine-Afrem/DaemonView/main/frontend/daemonview-fe/public/images/add-members-in-a-team.png" alt="Add Members to a Team" width="1000"/>
+</p>
 
 ---
 
-## 🛠️ Getting Started
+## Getting Started
 
-Clone the repository
+Follow these instructions to set up and run the project locally.
 
-```bash
-> git clone https://github.com/your-username/daemonview.git
-cd daemonview
-```
-To install dependencies, run:
+### Prerequisites
 
-```bash
-> npm install
-```
+Make sure you have the following software installed on your machine:
+- [Node.js](https://nodejs.org/en/) (v16 or later recommended)
+- [npm](https://www.npmjs.com/) (usually comes with Node.js)
+- A running [MySQL](https://www.mysql.com/) server
 
-Then, run the development server with:
+### Installation & Setup
 
-```bash
-> npm run dev
-```
+1.  **Clone the repository:**
+    ```bash
+    > git clone https://github.com/Jasmine-Afrem/DaemonView.git
+    > cd DaemonView
+    ```
+
+2.  **Install dependencies:**
+    This will install both frontend and backend packages.
+    ```bash
+    > npm install
+    ```
+
+3.  **Set up environment variables:**
+    Create a `.env` file in the root of the project. You can copy the example file:
+    ```bash
+    > cp .env.example .env
+    ```
+    Then, fill in the required variables in the `.env` file (e.g., database credentials, session secret).
+
+4.  **Run the development server:**
+    ```bash
+    > npm run dev
+    ```
+    The application will be available at `http://localhost:3000`.
