@@ -13,7 +13,7 @@
     &nbsp;&nbsp;
   <img src="https://img.shields.io/badge/Express.js-Backend-303030?style=for-the-badge&logo=express&logoColor=white" />
     &nbsp;&nbsp;
-  <img src="https://img.shields.io/badge/Status-In_Progress-FFB800?style=for-the-badge&logo=progress&logoColor=white" />
+  <img src="https://img.shields.io/badge/Status-Completed-4CAF50?style=for-the-badge&logo=checkmarx&logoColor=white" />
 </p>
 
 ---
